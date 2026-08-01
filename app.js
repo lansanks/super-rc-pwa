@@ -63,7 +63,7 @@ let allChapters = [];
 let uploads = loadList(UPLOADS_KEY);
 let approvedUploads = loadList(APPROVED_KEY);
 let ideas = loadList(IDEAS_CACHE_KEY);
-let isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+let isAdmin = localStorage.getItem(ADMIN_SESSION_KEY) === "1";
 
 // ---------- 导航 ----------
 enterHint.addEventListener("click", () => {
@@ -130,8 +130,8 @@ keyForm.addEventListener("submit", async (event) => {
     const ok = await verifyAdminKey(key);
     if (ok) {
       isAdmin = true;
-      sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
-      sessionStorage.setItem(ADMIN_KEY_SESSION_KEY, key);
+      localStorage.setItem(ADMIN_SESSION_KEY, "1");
+      localStorage.setItem(ADMIN_KEY_SESSION_KEY, key);
       keyForm.hidden = true;
       identityChoices.hidden = false;
       enterMain();
@@ -174,8 +174,8 @@ async function sha256Hex(text) {
 adminBadge.addEventListener("click", () => {
   if (!confirm("退出管理员模式？")) return;
   isAdmin = false;
-  sessionStorage.removeItem(ADMIN_SESSION_KEY);
-  sessionStorage.removeItem(ADMIN_KEY_SESSION_KEY);
+  localStorage.removeItem(ADMIN_SESSION_KEY);
+  localStorage.removeItem(ADMIN_KEY_SESSION_KEY);
   renderAll();
 });
 
@@ -453,7 +453,7 @@ async function supabaseFetch(path, options = {}) {
     "Content-Type": "application/json",
     ...(options.headers || {}),
   };
-  const adminKey = sessionStorage.getItem(ADMIN_KEY_SESSION_KEY);
+  const adminKey = localStorage.getItem(ADMIN_KEY_SESSION_KEY);
   if (adminKey) headers["x-admin-key"] = adminKey;
 
   const res = await fetchWithTimeout(
@@ -813,7 +813,12 @@ async function openChapter(chapter) {
 }
 
 async function openLocalChapter(upload) {
-  openReader(`第${upload.number}章 ${upload.name}`, null, upload.content);
+  const title = `第${upload.number}章 ${upload.name}`;
+  if (!upload.content) {
+    openReader(title, null, "该章节暂无正文内容");
+    return;
+  }
+  openReader(title, null, upload.content);
 }
 
 async function openReader(fallbackTitle, fileUrl, inlineContent) {

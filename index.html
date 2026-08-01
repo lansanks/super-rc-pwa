@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#fafafa" />
+  <meta name="description" content="重生之我觉醒了超级RC系统" />
+  <title>重生之我觉醒了超级RC系统</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- 首页 -->
+  <section id="home" class="screen active">
+    <div class="home-inner">
+      <h1 class="title">重生之我觉醒了超级rc系统</h1>
+      <p class="enter-hint">点击进入</p>
+    </div>
+  </section>
+
+  <!-- 主界面 -->
+  <section id="main" class="screen">
+    <button class="back" id="backBtn" aria-label="返回">‹</button>
+
+    <div class="content">
+      <button class="upload-box" id="uploadBtn">
+        <span class="plus">+</span>
+        <span class="upload-text">点击上传</span>
+      </button>
+
+      <div class="chapter-section">
+        <h2 class="section-title">已有章节</h2>
+        <ul class="chapter-list" id="chapterList">
+          <li class="empty">暂无章节</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

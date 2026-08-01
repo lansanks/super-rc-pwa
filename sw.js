@@ -1,4 +1,4 @@
-const CACHE_NAME = "super-rc-v10";
+const CACHE_NAME = "super-rc-v11";
 const ASSETS = [
   "./",
   "./index.html",
@@ -52,6 +52,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
+
+  // 跨域请求（GitHub API / raw 文件）不拦截
+  if (url.origin !== self.location.origin) return;
 
   // 密钥列表不缓存，始终优先获取最新版本
   if (url.pathname.endsWith("/admin-keys.json")) {

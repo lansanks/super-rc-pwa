@@ -49,17 +49,26 @@ const ideaSubmitBtn = document.getElementById("ideaSubmitBtn");
 const ideaPreviewModal = document.getElementById("ideaPreviewModal");
 const ideaPreviewList = document.getElementById("ideaPreviewList");
 const ideaPreviewCloseBtn = document.getElementById("ideaPreviewCloseBtn");
+const ghTokenModal = document.getElementById("ghTokenModal");
+const ghTokenInput = document.getElementById("ghTokenInput");
+const ghTokenSaveBtn = document.getElementById("ghTokenSaveBtn");
+const ghTokenCancelBtn = document.getElementById("ghTokenCancelBtn");
 
 // ---------- 数据 ----------
 const UPLOADS_KEY = "super-rc-uploads-v1";
 const APPROVED_KEY = "super-rc-approved-v1";
-const IDEAS_KEY = "super-rc-ideas-v1";
+const IDEAS_CACHE_KEY = "super-rc-ideas-cache-v1";
 const ADMIN_SESSION_KEY = "super-rc-admin";
+const GH_TOKEN_KEY = "super-rc-gh-token";
+const GH_OWNER = "lansanks";
+const GH_REPO = "super-rc-pwa";
+const GH_BRANCH = "main";
+const GH_FILE = "data/ideas.json";
 
 let allChapters = [];
 let uploads = loadList(UPLOADS_KEY);
 let approvedUploads = loadList(APPROVED_KEY);
-let ideas = loadList(IDEAS_KEY);
+let ideas = loadList(IDEAS_CACHE_KEY);
 let isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
 
 // ---------- 导航 ----------
@@ -271,7 +280,7 @@ ideaTextInput.addEventListener("input", () => {
   ideaCharCount.textContent = `${ideaTextInput.value.length}/50`;
 });
 
-ideaSubmitBtn.addEventListener("click", () => {
+ideaSubmitBtn.addEventListener("click", async () => {
   const name = ideaNameInput.value.trim();
   const text = ideaTextInput.value.trim();
 
@@ -288,21 +297,46 @@ ideaSubmitBtn.addEventListener("click", () => {
     return;
   }
 
-  ideas.unshift({
+  const idea = {
     id: `i-${Date.now()}`,
     name,
     text,
     approved: false,
     createdAt: new Date().toISOString(),
-  });
-  saveList(IDEAS_KEY, ideas);
-  resetIdeaForm();
-  ideaModal.hidden = true;
+  };
+  ideas.unshift(idea);
+  saveList(IDEAS_CACHE_KEY, ideas);
+  renderIdeas();
+
+  ideaSubmitBtn.disabled = true;
+  ideaSubmitBtn.textContent = "同步中…";
+  try {
+    const token = await ensureGitHubToken();
+    await pushIdeasToGitHub(ideas, `idea: ${name}`, token);
+    resetIdeaForm();
+    ideaModal.hidden = true;
+  } catch (err) {
+    console.warn("idea 同步失败:", err);
+    alert(`同步到 GitHub 失败，idea 已保存在本机：${err.message}`);
+  } finally {
+    ideaSubmitBtn.disabled = false;
+    ideaSubmitBtn.textContent = "提交";
+  }
 });
 
-previewIdeaBtn.addEventListener("click", () => {
+previewIdeaBtn.addEventListener("click", async () => {
   renderIdeas();
   ideaPreviewModal.hidden = false;
+  const status = document.getElementById("ideaPreviewStatus");
+  status.textContent = "同步中…";
+  try {
+    await fetchIdeasFromGitHub();
+    renderIdeas();
+    status.textContent = "";
+  } catch (err) {
+    console.warn("idea 同步失败:", err);
+    status.textContent = "同步失败，当前显示本机缓存";
+  }
 });
 
 ideaPreviewCloseBtn.addEventListener("click", () => {
@@ -364,20 +398,120 @@ function renderIdeas() {
   }
 }
 
-function approveIdea(id) {
+async function approveIdea(id) {
   const idea = ideas.find((item) => item.id === id);
   if (!idea || idea.approved) return;
   if (!confirm(`通过「${idea.name}」的 idea？`)) return;
   idea.approved = true;
   idea.approvedAt = new Date().toISOString();
-  saveList(IDEAS_KEY, ideas);
+  saveList(IDEAS_CACHE_KEY, ideas);
   renderIdeas();
+  try {
+    const token = await ensureGitHubToken();
+    await pushIdeasToGitHub(ideas, `approve idea: ${idea.name}`, token);
+  } catch (err) {
+    console.warn("审批同步失败:", err);
+    alert(`审批同步到 GitHub 失败：${err.message}`);
+  }
 }
 
 function resetIdeaForm() {
   ideaNameInput.value = "";
   ideaTextInput.value = "";
   ideaCharCount.textContent = "0/50";
+}
+
+// ---------- GitHub 同步 ----------
+function getGitHubToken() {
+  return localStorage.getItem(GH_TOKEN_KEY) || "";
+}
+
+function ensureGitHubToken() {
+  const existing = getGitHubToken();
+  if (existing) return Promise.resolve(existing);
+
+  return new Promise((resolve, reject) => {
+    ghTokenInput.value = "";
+    ghTokenModal.hidden = false;
+
+    ghTokenSaveBtn.onclick = () => {
+      const token = ghTokenInput.value.trim();
+      if (!token) {
+        alert("请粘贴 GitHub 令牌");
+        return;
+      }
+      localStorage.setItem(GH_TOKEN_KEY, token);
+      ghTokenModal.hidden = true;
+      resolve(token);
+    };
+
+    ghTokenCancelBtn.onclick = () => {
+      ghTokenModal.hidden = true;
+      reject(new Error("未连接 GitHub"));
+    };
+  });
+}
+
+async function fetchIdeasFromGitHub() {
+  const res = await fetch(
+    `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_FILE}`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  ideas = Array.isArray(data) ? data : [];
+  saveList(IDEAS_CACHE_KEY, ideas);
+  return ideas;
+}
+
+async function pushIdeasToGitHub(updatedIdeas, message, token) {
+  const api = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}?ref=${GH_BRANCH}`;
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+  };
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const readRes = await fetch(api, { headers });
+    if (!readRes.ok) throw new Error(`读取仓库文件失败(${readRes.status})`);
+    const info = await readRes.json();
+    const existing = JSON.parse(decodeBase64(info.content));
+    const merged = mergeIdeas(existing, updatedIdeas);
+
+    const body = {
+      message,
+      content: encodeBase64(JSON.stringify(merged, null, 2)),
+      sha: info.sha,
+      branch: GH_BRANCH,
+    };
+    const putRes = await fetch(api, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (putRes.ok) return putRes.json();
+    if (putRes.status === 409) continue; // 并发冲突，重读重试
+    const errData = await putRes.json().catch(() => ({}));
+    throw new Error(errData.message || `写入失败(${putRes.status})`);
+  }
+  throw new Error("多次写入冲突，请重试");
+}
+
+function mergeIdeas(existing, updated) {
+  const map = new Map();
+  for (const item of updated) map.set(item.id, item);
+  for (const item of existing) {
+    if (!map.has(item.id)) map.set(item.id, item);
+  }
+  return Array.from(map.values());
+}
+
+function encodeBase64(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+function decodeBase64(str) {
+  return decodeURIComponent(escape(atob(str)));
 }
 
 // ---------- 列表渲染 ----------
@@ -599,6 +733,7 @@ async function openReader(fallbackTitle, fileUrl, inlineContent) {
 }
 
 loadChapters();
+fetchIdeasFromGitHub().catch(() => {});
 
 // ---------- PWA ----------
 if ("serviceWorker" in navigator) {

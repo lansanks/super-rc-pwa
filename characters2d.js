@@ -70,6 +70,54 @@
         }
       }
 
+      // 关系文本里的端点归一化：
+      // - 去掉「（备注）」后缀，连接到真实人物节点
+      // - 把 “A + B” 拆成两条边
+      // - 把 “A/B” 别名归一到已有节点
+      const splitEndpoints = (raw) => {
+        const parts = [];
+        let depth = 0;
+        let start = 0;
+        for (let i = 0; i < raw.length; i++) {
+          const ch = raw[i];
+          if (ch === "（" || ch === "(") depth += 1;
+          else if (ch === "）" || ch === ")") depth = Math.max(0, depth - 1);
+          else if (ch === "+" && depth === 0) {
+            parts.push(raw.slice(start, i));
+            start = i + 1;
+          }
+        }
+        parts.push(raw.slice(start));
+        return parts;
+      };
+
+      const resolveEndpoint = (raw) => {
+        const trimmed = raw.trim();
+        const base = trimmed.replace(/[（(].*?[）)]/g, "").trim();
+        const candidates = base
+          .split("/")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        for (const candidate of candidates) {
+          if (nodeMap.has(candidate)) return nodeMap.get(candidate);
+        }
+        const title = candidates[0] || base || trimmed;
+        const sub = trimmed.match(/[（(](.*?)[）)]/);
+        return addNode(title, { subtitle: sub ? sub[1] : "" });
+      };
+
+      const addRelation = (aRaw, bRaw, label) => {
+        const a = resolveEndpoint(aRaw);
+        if (!a) return;
+        for (const part of splitEndpoints(bRaw)) {
+          const b = resolveEndpoint(part);
+          if (!b || a.id === b.id) continue;
+          this.edges.push({ a: a.id, b: b.id, label });
+          a.relations.push({ other: b.id, label });
+          b.relations.push({ other: a.id, label });
+        }
+      };
+
       for (const section of data.sections) {
         for (const line of section.relations) {
           const parts = line
@@ -77,12 +125,7 @@
             .map((s) => s.trim())
             .filter(Boolean);
           for (let i = 0; i + 2 < parts.length; i += 2) {
-            const a = addNode(parts[i], {});
-            const b = addNode(parts[i + 2], {});
-            const label = parts[i + 1];
-            this.edges.push({ a: a.id, b: b.id, label });
-            a.relations.push({ other: b.id, label });
-            b.relations.push({ other: a.id, label });
+            addRelation(parts[i], parts[i + 2], parts[i + 1]);
           }
         }
       }
@@ -105,7 +148,7 @@
         n.y = Math.sin(angle) * r;
       }
 
-      for (let iter = 0; iter < 220; iter++) {
+      for (let iter = 0; iter < 260; iter++) {
         const fx = {};
         const fy = {};
         for (const n of this.nodes) {
@@ -122,7 +165,7 @@
             const d = Math.max(Math.hypot(dx, dy), 1);
             dx /= d;
             dy /= d;
-            const f = 3200 / (d * d + 40);
+            const f = 4200 / (d * d + 48);
             fx[a.id] += dx * f;
             fy[a.id] += dy * f;
             fx[b.id] -= dx * f;
@@ -139,7 +182,7 @@
           const d = Math.max(Math.hypot(dx, dy), 1);
           dx /= d;
           dy /= d;
-          const f = (d - 150) * 0.06;
+          const f = (d - 160) * 0.06;
           fx[a.id] += dx * f;
           fy[a.id] += dy * f;
           fx[b.id] -= dx * f;
@@ -150,6 +193,44 @@
           n.x += fx[n.id] - n.x * 0.01;
           n.y += fy[n.id] - n.y * 0.01;
         }
+      }
+
+      // 标签防重叠：把名字框互相压住的节点沿连线方向推开
+      const labelWidth = (n) => n.name.length * 12 + 6;
+      for (let iter = 0; iter < 120; iter++) {
+        let moved = false;
+        for (let i = 0; i < this.nodes.length; i++) {
+          for (let j = i + 1; j < this.nodes.length; j++) {
+            const a = this.nodes[i];
+            const b = this.nodes[j];
+            const ax = a.x;
+            const ay = a.y - 20;
+            const aw = labelWidth(a);
+            const bx = b.x;
+            const by = b.y - 20;
+            const bw = labelWidth(b);
+            const ox = Math.min(ax + aw, bx + bw) - Math.max(ax, bx);
+            const oy = Math.min(ay + 18, by + 18) - Math.max(ay, by);
+            if (ox > 0 && oy > 0) {
+              let dx = b.x - a.x;
+              let dy = b.y - a.y;
+              const d = Math.max(Math.hypot(dx, dy), 1);
+              dx /= d;
+              dy /= d;
+              if (d < 1) {
+                dx = 1;
+                dy = 0;
+              }
+              const push = Math.min(Math.max(ox, oy), 6) * 0.5;
+              a.x -= dx * push;
+              a.y -= dy * push;
+              b.x += dx * push;
+              b.y += dy * push;
+              moved = true;
+            }
+          }
+        }
+        if (!moved) break;
       }
     }
 
@@ -170,6 +251,20 @@
         });
         this.svg.appendChild(line);
         this.lines.push({ el: line, a: e.a, b: e.b });
+      }
+
+      for (const e of this.edges) {
+        const a = this.nodeById.get(e.a);
+        const b = this.nodeById.get(e.b);
+        if (!a || !b) continue;
+        const label = svgEl("text", {
+          class: "char2d-edge-label",
+          x: (a.x + b.x) / 2,
+          y: (a.y + b.y) / 2 - 5,
+          "text-anchor": "middle",
+        });
+        label.textContent = e.label;
+        this.svg.appendChild(label);
       }
 
       for (const n of this.nodes) {
@@ -199,7 +294,7 @@
         maxX = Math.max(maxX, n.x);
         maxY = Math.max(maxY, n.y);
       }
-      const pad = 90;
+      const pad = 110;
       const w = Math.max(maxX - minX + pad * 2, 320);
       const h = Math.max(maxY - minY + pad * 2, 260);
       this.view = {

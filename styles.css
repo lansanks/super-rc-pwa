@@ -770,6 +770,15 @@ button {
   transition: stroke 0.15s ease, opacity 0.15s ease;
 }
 
+.char2d-edge-label {
+  font-size: 11px;
+  fill: var(--muted);
+  stroke: var(--bg);
+  stroke-width: 3px;
+  paint-order: stroke;
+  pointer-events: none;
+}
+
 .char2d-node {
   cursor: pointer;
 }

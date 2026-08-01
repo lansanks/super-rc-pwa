@@ -2,5 +2,13 @@
   {
     "label": "默认管理员",
     "hash": "7d7d0d17366e43db60feb11894bd1f66f1c4130a269337a2e8efa2a77e4c3d05"
+  },
+  {
+    "label": "管理员2",
+    "hash": "51ca702ee72cda595840205e4667f98a88646dd17ce32a737d5e1528fd71b63f"
+  },
+  {
+    "label": "管理员3",
+    "hash": "571cae7c33da4e684bf13a481b7d6538b95805a1e4a5a77d12ee82cd3b81fe29"
   }
 ]

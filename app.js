@@ -24,7 +24,15 @@ const readerBody = document.getElementById("readerBody");
 const charactersBtn = document.getElementById("charactersBtn");
 const charactersScreen = document.getElementById("charactersScreen");
 const charactersBackBtn = document.getElementById("charactersBackBtn");
-const charactersBody = document.getElementById("charactersBody");
+const charactersAddBtn = document.getElementById("charactersAddBtn");
+const charactersList = document.getElementById("charactersList");
+const charactersStatus = document.getElementById("charactersStatus");
+const charModal = document.getElementById("charModal");
+const charNameInput = document.getElementById("charNameInput");
+const charTextInput = document.getElementById("charTextInput");
+const charCharCount = document.getElementById("charCharCount");
+const charCancelBtn = document.getElementById("charCancelBtn");
+const charSubmitBtn = document.getElementById("charSubmitBtn");
 
 const tabs = document.querySelectorAll(".tab");
 const tabPanels = {
@@ -58,6 +66,7 @@ const ideaPreviewCloseBtn = document.getElementById("ideaPreviewCloseBtn");
 const UPLOADS_KEY = "super-rc-uploads-v1";
 const APPROVED_KEY = "super-rc-approved-v1";
 const IDEAS_CACHE_KEY = "super-rc-ideas-cache-v1";
+const CHARS_CACHE_KEY = "super-rc-chars-cache-v1";
 const ADMIN_SESSION_KEY = "super-rc-admin";
 const ADMIN_KEY_SESSION_KEY = "super-rc-admin-key";
 const SUPABASE_URL = "https://dmsogohfssgoewfitzqi.supabase.co";
@@ -67,6 +76,7 @@ let allChapters = [];
 let uploads = loadList(UPLOADS_KEY);
 let approvedUploads = loadList(APPROVED_KEY);
 let ideas = loadList(IDEAS_CACHE_KEY);
+let characters = loadList(CHARS_CACHE_KEY);
 let isAdmin = localStorage.getItem(ADMIN_SESSION_KEY) === "1";
 
 // ---------- 导航 ----------
@@ -98,35 +108,29 @@ readerBackBtn.addEventListener("click", () => {
   main.classList.add("active");
 });
 
-// 人物设定页
+// 人物设定页（预览 + 提交，管理员审批后由灰变实）
 charactersBackBtn.addEventListener("click", () => {
   charactersScreen.classList.remove("active");
   main.classList.add("active");
 });
 
+charactersAddBtn.addEventListener("click", () => {
+  resetCharForm();
+  charModal.hidden = false;
+});
+
 charactersBtn.addEventListener("click", async () => {
   main.classList.remove("active");
   charactersScreen.classList.add("active");
-  charactersBody.hidden = true;
-
-  if (window.initCharacterGraph2D) {
-    try {
-      await window.initCharacterGraph2D();
-      return;
-    } catch (err) {
-      console.warn("2D 关系图初始化失败，回退为列表:", err);
-    }
-  }
-
-  charactersBody.hidden = false;
-  charactersBody.innerHTML = '<p class="empty">加载中…</p>';
+  renderCharactersList();
+  charactersStatus.textContent = "同步中…";
   try {
-    const res = await fetchWithTimeout("./人物设定.md", {}, 8000);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    renderCharacters(await res.text());
+    await fetchCharactersFromCloud();
+    renderCharactersList();
+    charactersStatus.textContent = "";
   } catch (err) {
-    console.warn("人物设定加载失败:", err);
-    charactersBody.innerHTML = '<p class="empty">人物设定加载失败，请稍后重试</p>';
+    console.warn("人物设定同步失败:", err);
+    charactersStatus.textContent = "同步失败，当前显示本机缓存";
   }
 });
 
@@ -220,225 +224,205 @@ function updateAdminBadge() {
 }
 
 // ---------- 人物设定 ----------
-function renderCharacters(md) {
-  const { sections, meta } = parseCharacters(md);
-  charactersBody.innerHTML = "";
-  const frag = document.createDocumentFragment();
+const CHAR_KIND = "【人物设定】";
 
-  if (meta) {
-    const metaEl = document.createElement("p");
-    metaEl.className = "chars-meta";
-    metaEl.textContent = meta;
-    frag.appendChild(metaEl);
+function isCharacterRow(row) {
+  return typeof row.name === "string" && row.name.startsWith(CHAR_KIND);
+}
+
+function isIdeaRow(row) {
+  return !isCharacterRow(row);
+}
+
+function toCharRow(char) {
+  return {
+    id: char.id,
+    name: `${CHAR_KIND}${char.submitter}`,
+    text: char.text,
+    approved: Boolean(char.approved),
+    created_at: char.createdAt || char.created_at || null,
+    approved_at: char.approvedAt || char.approved_at || null,
+  };
+}
+
+function fromCharRow(row) {
+  const name = String(row.name || "");
+  return {
+    id: row.id,
+    submitter: name.startsWith(CHAR_KIND)
+      ? name.slice(CHAR_KIND.length)
+      : name || "匿名",
+    text: row.text || "",
+    approved: Boolean(row.approved),
+    createdAt: row.created_at || null,
+    approvedAt: row.approved_at || null,
+  };
+}
+
+// 提交人物设定弹窗
+charCancelBtn.addEventListener("click", () => {
+  charModal.hidden = true;
+});
+
+charModal.addEventListener("click", (event) => {
+  if (event.target === charModal) charModal.hidden = true;
+});
+
+charTextInput.addEventListener("input", () => {
+  charCharCount.textContent = `${charTextInput.value.length}/200`;
+});
+
+charSubmitBtn.addEventListener("click", async () => {
+  const name = charNameInput.value.trim();
+  const text = charTextInput.value.trim();
+
+  if (!name) {
+    alert("请填写姓名");
+    return;
+  }
+  if (!text) {
+    alert("请填写人物设定内容");
+    return;
+  }
+  if (text.length > 200) {
+    alert("人物设定内容不能超过 200 字");
+    return;
   }
 
-  for (const section of sections) {
-    const head = document.createElement("h3");
-    head.className = "section-head";
-    head.textContent = section.title;
-    frag.appendChild(head);
+  const char = {
+    id: `c-${Date.now()}`,
+    submitter: name,
+    text,
+    approved: false,
+    createdAt: new Date().toISOString(),
+  };
+  characters.unshift(char);
+  saveList(CHARS_CACHE_KEY, characters);
+  renderCharactersList();
 
-    for (const ch of section.characters) {
-      frag.appendChild(buildCharacterCard(ch));
-    }
-    if (section.robots.length) {
-      frag.appendChild(buildRobotTable(section.robots));
-    }
-    for (const row of buildRelationRows(section.relations)) {
-      frag.appendChild(row);
-    }
-    section.mysteries.forEach((m, i) => {
-      const item = document.createElement("div");
-      item.className = "mystery-item";
-      const idx = document.createElement("span");
-      idx.className = "mystery-index";
-      idx.textContent = `${i + 1}.`;
-      const text = document.createElement("span");
-      text.textContent = m;
-      item.appendChild(idx);
-      item.appendChild(text);
-      frag.appendChild(item);
+  charSubmitBtn.disabled = true;
+  charSubmitBtn.textContent = "同步中…";
+  try {
+    await supabaseFetch("ideas", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify([toCharRow(char)]),
     });
+    resetCharForm();
+    charModal.hidden = true;
+  } catch (err) {
+    console.warn("人物设定同步失败:", err);
+    const reason = err.name === "AbortError" ? "连接超时" : err.message;
+    alert(`同步失败，人物设定已保存在本机，下次打开会自动重试：${reason}`);
+  } finally {
+    charSubmitBtn.disabled = false;
+    charSubmitBtn.textContent = "提交";
   }
+});
 
-  charactersBody.appendChild(frag);
+function resetCharForm() {
+  charNameInput.value = "";
+  charTextInput.value = "";
+  charCharCount.textContent = "0/200";
 }
 
-function parseCharacters(md) {
-  const sections = [];
-  let current = null;
-  let character = null;
-  let meta = "";
+function renderCharactersList() {
+  charactersList.innerHTML = "";
 
-  for (const raw of md.split("\n")) {
-    const line = raw.trimEnd();
-    if (line.startsWith("## ")) {
-      current = {
-        title: line.slice(3).trim().replace(/^[一二三四五六七八九十]+、/, ""),
-        characters: [],
-        robots: [],
-        relations: [],
-        mysteries: [],
-      };
-      sections.push(current);
-      character = null;
-      continue;
-    }
-    if (!current) {
-      if (line.startsWith("更新时间")) meta = line;
-      continue;
-    }
-    if (line.startsWith("### ")) {
-      character = { title: line.slice(4).trim(), fields: [], paragraphs: [] };
-      current.characters.push(character);
-      continue;
-    }
-    if (current.title.includes("机器人") && line.startsWith("|")) {
-      const cells = line
-        .split("|")
-        .slice(1, -1)
-        .map((c) => c.trim());
-      if (
-        cells.length >= 4 &&
-        cells[0] !== "名称" &&
-        !/^[-:]+$/.test(cells.join(""))
-      ) {
-        current.robots.push({
-          name: cells[0],
-          type: cells[1],
-          owner: cells[2],
-          status: cells[3],
-        });
-      }
-      continue;
-    }
-    if (current.title.includes("关系") && line.includes("──")) {
-      current.relations.push(line.trim());
-      continue;
-    }
-    if (current.title.includes("悬念")) {
-      const m = line.match(/^\d+\.\s*(.*)/);
-      if (m) current.mysteries.push(m[1]);
-      continue;
-    }
-    const field = line.match(/^[-*]\s+\*\*([^*]+)\*\*[：:]\s*(.*)/);
-    if (field && character) {
-      character.fields.push({ key: field[1].trim(), value: field[2].trim() });
-      continue;
-    }
-    const plain = line.replace(/^[-*]\s+/, "").trim();
-    if (plain && character && !plain.startsWith("#")) {
-      character.paragraphs.push(plain);
-    }
+  if (!characters.length) {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = "暂无人物设定";
+    charactersList.appendChild(p);
+    return;
   }
 
-  return { sections, meta };
+  for (const char of characters) {
+    const item = document.createElement("div");
+    item.className = char.approved ? "idea-item approved" : "idea-item pending";
+
+    const text = document.createElement("p");
+    text.className = "idea-text";
+    text.textContent = char.text;
+
+    const meta = document.createElement("div");
+    meta.className = "idea-meta";
+
+    const name = document.createElement("span");
+    name.className = "idea-name";
+    name.textContent = char.submitter;
+
+    const actions = document.createElement("span");
+    actions.className = "idea-actions";
+
+    const status = document.createElement("span");
+    status.className = "status";
+    status.textContent = char.approved ? "已通过" : "待审批";
+
+    actions.appendChild(status);
+
+    if (isAdmin && !char.approved) {
+      const approveBtn = document.createElement("button");
+      approveBtn.className = "idea-approve";
+      approveBtn.textContent = "审批";
+      approveBtn.addEventListener("click", () => approveCharacter(char.id));
+      actions.appendChild(approveBtn);
+    }
+
+    meta.appendChild(name);
+    meta.appendChild(actions);
+    item.appendChild(text);
+    item.appendChild(meta);
+    charactersList.appendChild(item);
+  }
 }
 
-function buildCharacterCard(ch) {
-  const card = document.createElement("article");
-  card.className = "char-card";
-
-  const head = document.createElement("header");
-  head.className = "char-head";
-
-  const name = document.createElement("h4");
-  name.className = "char-name";
-  const sub = document.createElement("span");
-  sub.className = "char-sub";
-
-  const match = ch.title.match(/^(.*?)（(.*)）$/);
-  name.textContent = match ? match[1] : ch.title;
-  sub.textContent = match ? match[2] : "";
-
-  head.appendChild(name);
-  if (sub.textContent) head.appendChild(sub);
-  card.appendChild(head);
-
-  const fields = document.createElement("div");
-  fields.className = "char-fields";
-  for (const f of ch.fields) {
-    const row = document.createElement("div");
-    row.className = "char-field";
-    const key = document.createElement("span");
-    key.className = "char-key";
-    key.textContent = f.key;
-    const value = document.createElement("span");
-    value.className = "char-value";
-    value.textContent = f.value;
-    row.appendChild(key);
-    row.appendChild(value);
-    fields.appendChild(row);
+async function approveCharacter(id) {
+  const char = characters.find((item) => item.id === id);
+  if (!char || char.approved) return;
+  if (!confirm(`通过「${char.submitter}」的人物设定？`)) return;
+  char.approved = true;
+  char.approvedAt = new Date().toISOString();
+  saveList(CHARS_CACHE_KEY, characters);
+  renderCharactersList();
+  try {
+    await supabaseFetch(`ideas?id=eq.${encodeURIComponent(char.id)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        approved: true,
+        approved_at: char.approvedAt || new Date().toISOString(),
+      }),
+    });
+  } catch (err) {
+    console.warn("人物设定审批同步失败:", err);
+    const reason =
+      err.name === "AbortError"
+        ? "连接超时"
+        : String(err.message).includes("403")
+        ? "没有管理员权限，审批失败"
+        : err.message;
+    alert(`审批同步失败，稍后会自动重试：${reason}`);
   }
-  card.appendChild(fields);
-
-  for (const p of ch.paragraphs) {
-    const para = document.createElement("p");
-    para.className = "char-para";
-    para.textContent = p;
-    card.appendChild(para);
-  }
-
-  return card;
 }
 
-function buildRobotTable(robots) {
-  const wrap = document.createElement("div");
-  wrap.className = "robot-wrap";
-
-  const head = document.createElement("div");
-  head.className = "robot-grid head";
-  ["名称", "类型", "归属", "状态"].forEach((t) => {
-    const span = document.createElement("span");
-    span.textContent = t;
-    head.appendChild(span);
+async function fetchCharactersFromCloud() {
+  const rows = await supabaseFetch("ideas?select=*&order=created_at.desc");
+  const cloud = (Array.isArray(rows) ? rows : [])
+    .filter(isCharacterRow)
+    .map(fromCharRow);
+  const changed = characters.filter((local) => {
+    const remote = cloud.find((item) => item.id === local.id);
+    return (
+      !remote ||
+      remote.approved !== Boolean(local.approved) ||
+      (remote.approvedAt || null) !== (local.approvedAt || null)
+    );
   });
-  wrap.appendChild(head);
-
-  for (const r of robots) {
-    const row = document.createElement("div");
-    row.className = "robot-grid";
-    [r.name, r.type, r.owner, r.status].forEach((v) => {
-      const span = document.createElement("span");
-      span.textContent = v;
-      row.appendChild(span);
-    });
-    wrap.appendChild(row);
-  }
-
-  return wrap;
-}
-
-function buildRelationRows(lines) {
-  const rows = [];
-  for (const line of lines) {
-    const parts = line
-      .split("──")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    for (let i = 0; i + 2 < parts.length; i += 2) {
-      const row = document.createElement("div");
-      row.className = "rel-row";
-
-      const a = document.createElement("span");
-      a.className = "rel-a";
-      a.textContent = parts[i];
-
-      const edge = document.createElement("span");
-      edge.className = "rel-edge";
-      edge.textContent = parts[i + 1];
-
-      const b = document.createElement("span");
-      b.className = "rel-b";
-      b.textContent = parts[i + 2];
-
-      row.appendChild(a);
-      row.appendChild(edge);
-      row.appendChild(b);
-      rows.push(row);
-    }
-  }
-  return rows;
+  if (changed.length) await upsertRows("ideas", changed.map(toCharRow));
+  characters = mergeById(cloud, characters);
+  saveList(CHARS_CACHE_KEY, characters);
+  return characters;
 }
 
 // ---------- 栏目切换 ----------
@@ -620,7 +604,9 @@ ideaPreviewModal.addEventListener("click", (event) => {
 function renderIdeas() {
   ideaPreviewList.innerHTML = "";
 
-  if (!ideas.length) {
+  const visibleIdeas = ideas.filter(isIdeaRow);
+
+  if (!visibleIdeas.length) {
     const p = document.createElement("p");
     p.className = "empty";
     p.textContent = "暂无 idea";
@@ -628,7 +614,7 @@ function renderIdeas() {
     return;
   }
 
-  for (const idea of ideas) {
+  for (const idea of visibleIdeas) {
     const item = document.createElement("div");
     item.className = idea.approved ? "idea-item approved" : "idea-item pending";
 
@@ -765,7 +751,7 @@ async function upsertRows(table, rows) {
 
 async function fetchIdeasFromCloud() {
   const rows = await supabaseFetch("ideas?select=*&order=created_at.desc");
-  const cloud = Array.isArray(rows) ? rows : [];
+  const cloud = (Array.isArray(rows) ? rows : []).filter(isIdeaRow);
   const changed = ideas.filter((local) => {
     const remote = cloud.find((item) => item.id === local.id);
     return (
@@ -775,7 +761,7 @@ async function fetchIdeasFromCloud() {
     );
   });
   if (changed.length) await upsertRows("ideas", changed.map(toIdeaRow));
-  ideas = mergeById(cloud, ideas);
+  ideas = mergeById(cloud, ideas).filter(isIdeaRow);
   saveList(IDEAS_CACHE_KEY, ideas);
   return ideas;
 }
@@ -855,7 +841,11 @@ async function initCloudSync() {
   migrateLegacyLocal();
   await migrateGitHubIdeas();
   try {
-    await Promise.all([fetchIdeasFromCloud(), fetchChaptersFromCloud()]);
+    await Promise.all([
+      fetchIdeasFromCloud(),
+      fetchChaptersFromCloud(),
+      fetchCharactersFromCloud(),
+    ]);
   } catch (err) {
     console.warn("云端同步失败，继续使用本机数据:", err);
   }

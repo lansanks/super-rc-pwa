@@ -5,6 +5,7 @@ const ASSETS = [
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
+  "./chapters.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];

@@ -138,6 +138,13 @@ button {
   list-style: none;
 }
 
+.chapter-item {
+  padding: 16px 2px;
+  font-size: 15px;
+  letter-spacing: 1px;
+  border-bottom: 1px solid var(--line);
+}
+
 .empty {
   padding: 32px 0;
   text-align: center;

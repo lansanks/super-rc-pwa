@@ -49,28 +49,20 @@ const ideaSubmitBtn = document.getElementById("ideaSubmitBtn");
 const ideaPreviewModal = document.getElementById("ideaPreviewModal");
 const ideaPreviewList = document.getElementById("ideaPreviewList");
 const ideaPreviewCloseBtn = document.getElementById("ideaPreviewCloseBtn");
-const ghTokenModal = document.getElementById("ghTokenModal");
-const ghTokenInput = document.getElementById("ghTokenInput");
-const ghTokenSaveBtn = document.getElementById("ghTokenSaveBtn");
-const ghTokenCancelBtn = document.getElementById("ghTokenCancelBtn");
 
 // ---------- 数据 ----------
 const UPLOADS_KEY = "super-rc-uploads-v1";
 const APPROVED_KEY = "super-rc-approved-v1";
 const IDEAS_CACHE_KEY = "super-rc-ideas-cache-v1";
 const ADMIN_SESSION_KEY = "super-rc-admin";
-const GH_TOKEN_KEY = "super-rc-gh-token";
-const GH_OWNER = "lansanks";
-const GH_REPO = "super-rc-pwa";
-const GH_BRANCH = "main";
-const GH_FILE = "data/ideas.json";
+const SUPABASE_URL = "https://dmsogohfssgoewfitzqi.supabase.co";
+const SUPABASE_KEY = "sb_publishable_txHcRQMDxsCGfGG8qhkigg_1RRWABhi";
 
 let allChapters = [];
 let uploads = loadList(UPLOADS_KEY);
 let approvedUploads = loadList(APPROVED_KEY);
 let ideas = loadList(IDEAS_CACHE_KEY);
 let isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
-migrateLocalIdeas();
 
 // ---------- 导航 ----------
 enterHint.addEventListener("click", () => {
@@ -243,13 +235,14 @@ confirmUploadBtn.addEventListener("click", () => {
   }
 
   const fileReader = new FileReader();
-  fileReader.onload = () => {
+  fileReader.onload = async () => {
     const upload = {
       id: `u-${Date.now()}`,
       number,
       name,
       fileName: file.name,
       content: String(fileReader.result || ""),
+      status: "pending",
       uploadedAt: new Date().toISOString(),
     };
     uploads.unshift(upload);
@@ -258,6 +251,27 @@ confirmUploadBtn.addEventListener("click", () => {
     resetUploadForm();
     uploadModal.hidden = true;
     setActiveTab("review");
+
+    try {
+      await supabaseFetch("uploaded_chapters", {
+        method: "POST",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify([
+          {
+            id: upload.id,
+            number: upload.number,
+            name: upload.name,
+            file_name: upload.fileName,
+            content: upload.content,
+            status: "pending",
+            created_at: upload.uploadedAt,
+          },
+        ]),
+      });
+    } catch (err) {
+      console.warn("章节同步失败:", err);
+      alert("章节已保存在本机，云端同步失败，下次打开会自动重试");
+    }
   };
   fileReader.onerror = () => alert("文件读取失败，请重试");
   fileReader.readAsText(file, "utf-8");
@@ -312,14 +326,17 @@ ideaSubmitBtn.addEventListener("click", async () => {
   ideaSubmitBtn.disabled = true;
   ideaSubmitBtn.textContent = "同步中…";
   try {
-    const token = await ensureGitHubToken();
-    await pushIdeasToGitHub(ideas, `idea: ${name}`, token);
+    await supabaseFetch("ideas", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify([idea]),
+    });
     resetIdeaForm();
     ideaModal.hidden = true;
   } catch (err) {
     console.warn("idea 同步失败:", err);
     const reason = err.name === "AbortError" ? "连接超时" : err.message;
-    alert(`同步到 GitHub 失败，idea 已保存在本机：${reason}`);
+    alert(`同步失败，idea 已保存在本机，下次打开会自动重试：${reason}`);
   } finally {
     ideaSubmitBtn.disabled = false;
     ideaSubmitBtn.textContent = "提交";
@@ -332,7 +349,7 @@ previewIdeaBtn.addEventListener("click", async () => {
   const status = document.getElementById("ideaPreviewStatus");
   status.textContent = "同步中…";
   try {
-    await fetchIdeasFromGitHub();
+    await fetchIdeasFromCloud();
     renderIdeas();
     status.textContent = "";
   } catch (err) {
@@ -409,12 +426,18 @@ async function approveIdea(id) {
   saveList(IDEAS_CACHE_KEY, ideas);
   renderIdeas();
   try {
-    const token = await ensureGitHubToken();
-    await pushIdeasToGitHub(ideas, `approve idea: ${idea.name}`, token);
+    await supabaseFetch(`ideas?id=eq.${encodeURIComponent(idea.id)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        approved: true,
+        approved_at: idea.approvedAt || new Date().toISOString(),
+      }),
+    });
   } catch (err) {
     console.warn("审批同步失败:", err);
     const reason = err.name === "AbortError" ? "连接超时" : err.message;
-    alert(`审批同步到 GitHub 失败：${reason}`);
+    alert(`审批同步失败，稍后会自动重试：${reason}`);
   }
 }
 
@@ -424,58 +447,85 @@ function resetIdeaForm() {
   ideaCharCount.textContent = "0/50";
 }
 
-// ---------- GitHub 同步 ----------
-function getGitHubToken() {
-  return localStorage.getItem(GH_TOKEN_KEY) || "";
+// ---------- Supabase 同步 ----------
+async function supabaseFetch(path, options = {}) {
+  const res = await fetchWithTimeout(
+    `${SUPABASE_URL}/rest/v1/${path}`,
+    {
+      ...options,
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    },
+    10000
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Supabase ${res.status}: ${body.slice(0, 120)}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
 }
 
-function ensureGitHubToken() {
-  const existing = getGitHubToken();
-  if (existing) return Promise.resolve(existing);
-
-  return new Promise((resolve, reject) => {
-    ghTokenInput.value = "";
-    ghTokenModal.hidden = false;
-
-    ghTokenSaveBtn.onclick = () => {
-      const token = ghTokenInput.value.trim();
-      if (!token) {
-        alert("请粘贴 GitHub 令牌");
-        return;
-      }
-      localStorage.setItem(GH_TOKEN_KEY, token);
-      ghTokenModal.hidden = true;
-      resolve(token);
-    };
-
-    ghTokenCancelBtn.onclick = () => {
-      ghTokenModal.hidden = true;
-      reject(new Error("未连接 GitHub"));
-    };
+async function upsertRows(table, rows) {
+  if (!rows.length) return;
+  await supabaseFetch(table, {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(rows),
   });
 }
 
-async function fetchIdeasFromGitHub() {
-  const urls = [
-    `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_FILE}`,
-    `https://cdn.jsdelivr.net/gh/${GH_OWNER}/${GH_REPO}@${GH_BRANCH}/${GH_FILE}`,
-  ];
-  let lastError;
+async function fetchIdeasFromCloud() {
+  const rows = await supabaseFetch("ideas?select=*&order=created_at.desc");
+  const cloud = Array.isArray(rows) ? rows : [];
+  const changed = ideas.filter((local) => {
+    const remote = cloud.find((item) => item.id === local.id);
+    return (
+      !remote ||
+      remote.approved !== Boolean(local.approved) ||
+      (remote.approved_at || null) !== (local.approvedAt || null)
+    );
+  });
+  if (changed.length) await upsertRows("ideas", changed);
+  ideas = mergeById(cloud, ideas);
+  saveList(IDEAS_CACHE_KEY, ideas);
+  return ideas;
+}
 
-  for (const url of urls) {
-    try {
-      const res = await fetchWithTimeout(url, {}, 8000);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      // 保留本机还没同步上去的 idea，后续提交时一起合并写入 GitHub
-      ideas = mergeIdeas(Array.isArray(data) ? data : [], ideas);
-      saveList(IDEAS_CACHE_KEY, ideas);
-      return ideas;
-    } catch (err) {
-      lastError = err;
-    }
+async function fetchChaptersFromCloud() {
+  const rows = await supabaseFetch("uploaded_chapters?select=*&order=created_at.desc");
+  const cloud = Array.isArray(rows) ? rows : [];
+  const localAll = [...uploads, ...approvedUploads];
+  const changed = localAll.filter((local) => {
+    const remote = cloud.find((item) => item.id === local.id);
+    return (
+      !remote ||
+      remote.status !== (local.status || "pending") ||
+      (remote.approved_at || null) !== (local.approvedAt || null)
+    );
+  });
+  if (changed.length) await upsertRows("uploaded_chapters", changed);
+
+  const merged = mergeById(cloud, localAll);
+  uploads = merged.filter((item) => (item.status || "pending") === "pending");
+  approvedUploads = merged.filter((item) => item.status === "approved");
+  saveList(UPLOADS_KEY, uploads);
+  saveList(APPROVED_KEY, approvedUploads);
+}
+
+function mergeById(baseRows, preferredRows) {
+  const map = new Map();
+  for (const row of baseRows) {
+    if (row && row.id) map.set(row.id, row);
   }
-  throw lastError;
+  for (const row of preferredRows) {
+    if (row && row.id) map.set(row.id, row);
+  }
+  return Array.from(map.values());
 }
 
 function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
@@ -486,72 +536,46 @@ function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
   );
 }
 
-function migrateLocalIdeas() {
+function migrateLegacyLocal() {
   try {
-    const old = localStorage.getItem("super-rc-ideas-v1");
-    if (!old) return;
-    const oldIdeas = JSON.parse(old);
+    const oldIdeas = JSON.parse(localStorage.getItem("super-rc-ideas-v1") || "[]");
     localStorage.removeItem("super-rc-ideas-v1");
-    if (!Array.isArray(oldIdeas) || !oldIdeas.length) return;
-    ideas = mergeIdeas(ideas, oldIdeas);
-    saveList(IDEAS_CACHE_KEY, ideas);
+    if (Array.isArray(oldIdeas) && oldIdeas.length) {
+      ideas = mergeById(ideas, oldIdeas);
+      saveList(IDEAS_CACHE_KEY, ideas);
+    }
   } catch (err) {
     console.warn("迁移旧 idea 失败:", err);
   }
 }
 
-async function pushIdeasToGitHub(updatedIdeas, message, token) {
-  const api = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}?ref=${GH_BRANCH}`;
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.github+json",
-  };
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const readRes = await fetchWithTimeout(api, { headers }, 10000);
-    if (!readRes.ok) throw new Error(`读取仓库文件失败(${readRes.status})`);
-    const info = await readRes.json();
-    const existing = JSON.parse(decodeBase64(info.content));
-    const merged = mergeIdeas(existing, updatedIdeas);
-
-    const body = {
-      message,
-      content: encodeBase64(JSON.stringify(merged, null, 2)),
-      sha: info.sha,
-      branch: GH_BRANCH,
-    };
-    const putRes = await fetchWithTimeout(
-      api,
-      {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(body),
-      },
-      10000
+async function migrateGitHubIdeas() {
+  try {
+    const res = await fetchWithTimeout(
+      "https://raw.githubusercontent.com/lansanks/super-rc-pwa/main/data/ideas.json",
+      {},
+      8000
     );
-    if (putRes.ok) return putRes.json();
-    if (putRes.status === 409) continue; // 并发冲突，重读重试
-    const errData = await putRes.json().catch(() => ({}));
-    throw new Error(errData.message || `写入失败(${putRes.status})`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data) && data.length) {
+      ideas = mergeById(ideas, data);
+      saveList(IDEAS_CACHE_KEY, ideas);
+    }
+  } catch (err) {
+    console.warn("读取旧 GitHub idea 失败（可忽略）:", err);
   }
-  throw new Error("多次写入冲突，请重试");
 }
 
-function mergeIdeas(existing, updated) {
-  const map = new Map();
-  for (const item of updated) map.set(item.id, item);
-  for (const item of existing) {
-    if (!map.has(item.id)) map.set(item.id, item);
+async function initCloudSync() {
+  migrateLegacyLocal();
+  await migrateGitHubIdeas();
+  try {
+    await Promise.all([fetchIdeasFromCloud(), fetchChaptersFromCloud()]);
+  } catch (err) {
+    console.warn("云端同步失败，继续使用本机数据:", err);
   }
-  return Array.from(map.values());
-}
-
-function encodeBase64(str) {
-  return btoa(unescape(encodeURIComponent(str)));
-}
-
-function decodeBase64(str) {
-  return decodeURIComponent(escape(atob(str)));
+  renderAll();
 }
 
 // ---------- 列表渲染 ----------
@@ -669,7 +693,7 @@ function renderUploads() {
   }
 }
 
-function approveUpload(id) {
+async function approveUpload(id) {
   const index = uploads.findIndex((upload) => upload.id === id);
   if (index === -1) return;
   const upload = uploads[index];
@@ -678,12 +702,27 @@ function approveUpload(id) {
   }
 
   uploads.splice(index, 1);
+  upload.status = "approved";
   upload.approvedAt = new Date().toISOString();
   approvedUploads.unshift(upload);
   saveList(UPLOADS_KEY, uploads);
   saveList(APPROVED_KEY, approvedUploads);
   renderUploads();
   renderPending(allChapters);
+
+  try {
+    await supabaseFetch(`uploaded_chapters?id=eq.${encodeURIComponent(upload.id)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        status: "approved",
+        approved_at: upload.approvedAt,
+      }),
+    });
+  } catch (err) {
+    console.warn("审批同步失败:", err);
+    alert("审批已保存在本机，云端同步失败，下次打开会自动重试");
+  }
 }
 
 function makeChapterItem(chapter, { clickable = false, locked = false, hint = "" } = {}) {
@@ -773,7 +812,7 @@ async function openReader(fallbackTitle, fileUrl, inlineContent) {
 }
 
 loadChapters();
-fetchIdeasFromGitHub().catch(() => {});
+initCloudSync();
 
 // ---------- PWA ----------
 if ("serviceWorker" in navigator) {

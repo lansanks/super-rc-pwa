@@ -461,9 +461,23 @@ loadChapters();
 
 // ---------- PWA ----------
 if ("serviceWorker" in navigator) {
+  let autoRefreshed = false;
+
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("./sw.js")
+      .then((registration) => {
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
+      })
       .catch((err) => console.warn("Service Worker 注册失败:", err));
+  });
+
+  // 新版本就绪后自动刷新一次，避免手动刷新两遍
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (autoRefreshed) return;
+    autoRefreshed = true;
+    window.location.reload();
   });
 }

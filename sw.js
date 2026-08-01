@@ -1,4 +1,4 @@
-const CACHE_NAME = "super-rc-v7";
+const CACHE_NAME = "super-rc-v8";
 const ASSETS = [
   "./",
   "./index.html",
@@ -21,6 +21,12 @@ self.addEventListener("install", (event) => {
       .then((cache) => cache.addAll(ASSETS))
       .then(() => self.skipWaiting())
   );
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {

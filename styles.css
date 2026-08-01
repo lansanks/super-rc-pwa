@@ -329,7 +329,8 @@ button {
 }
 
 .field input[type="text"],
-.field input[type="number"] {
+.field input[type="number"],
+.field input[type="password"] {
   width: 100%;
   font: inherit;
   font-size: 16px;
@@ -345,6 +346,13 @@ button {
 
 .field input:focus {
   border-color: rgba(26, 26, 26, 0.5);
+}
+
+.key-form .field input[type="password"] {
+  font-size: 18px;
+  letter-spacing: 3px;
+  text-align: center;
+  padding: 16px;
 }
 
 .file-picker {

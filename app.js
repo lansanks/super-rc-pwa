@@ -287,7 +287,7 @@ function renderPending(chapters) {
   }
 
   for (const chapter of repoLocked) {
-    const li = makeChapterItem(chapter, { locked: !isAdmin, hint: "未更新" });
+    const li = makeChapterItem(chapter, { locked: true, hint: "未更新" });
     if (isAdmin) {
       li.classList.add("clickable");
       li.addEventListener("click", () => openChapter(chapter));
@@ -297,7 +297,7 @@ function renderPending(chapters) {
 
   for (const upload of approvedUploads) {
     const li = document.createElement("li");
-    li.className = isAdmin ? "chapter-item clickable" : "chapter-item locked";
+    li.className = isAdmin ? "chapter-item locked clickable" : "chapter-item locked";
 
     const text = document.createElement("span");
     text.textContent = `第${upload.number}章 ${upload.name}`;
@@ -324,7 +324,7 @@ function renderUploads() {
 
   for (const upload of uploads) {
     const li = document.createElement("li");
-    li.className = "chapter-item";
+    li.className = "chapter-item locked";
 
     const text = document.createElement("span");
     text.textContent = `第${upload.number}章 ${upload.name}`;

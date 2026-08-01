@@ -46,6 +46,7 @@ def cmd_add(args):
     print(f"已添加密钥: {args.label}")
     if not args.key:
         print(f"新密钥（只显示这一次，请保存好）: {key}")
+    print("提示: 运行 python3 tools/sync_admin_keys.py 同步到 Supabase")
     return 0
 
 
@@ -65,6 +66,7 @@ def cmd_remove(args):
     removed = len(entries) - len(kept)
     save_entries(kept)
     print(f"已移除 {removed} 个密钥")
+    print("提示: 运行 python3 tools/sync_admin_keys.py 同步到 Supabase")
     return 0
 
 

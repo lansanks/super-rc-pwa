@@ -55,6 +55,7 @@ const UPLOADS_KEY = "super-rc-uploads-v1";
 const APPROVED_KEY = "super-rc-approved-v1";
 const IDEAS_CACHE_KEY = "super-rc-ideas-cache-v1";
 const ADMIN_SESSION_KEY = "super-rc-admin";
+const ADMIN_KEY_SESSION_KEY = "super-rc-admin-key";
 const SUPABASE_URL = "https://dmsogohfssgoewfitzqi.supabase.co";
 const SUPABASE_KEY = "sb_publishable_txHcRQMDxsCGfGG8qhkigg_1RRWABhi";
 
@@ -130,6 +131,7 @@ keyForm.addEventListener("submit", async (event) => {
     if (ok) {
       isAdmin = true;
       sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+      sessionStorage.setItem(ADMIN_KEY_SESSION_KEY, key);
       keyForm.hidden = true;
       identityChoices.hidden = false;
       enterMain();
@@ -173,6 +175,7 @@ adminBadge.addEventListener("click", () => {
   if (!confirm("退出管理员模式？")) return;
   isAdmin = false;
   sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  sessionStorage.removeItem(ADMIN_KEY_SESSION_KEY);
   renderAll();
 });
 
@@ -436,7 +439,12 @@ async function approveIdea(id) {
     });
   } catch (err) {
     console.warn("审批同步失败:", err);
-    const reason = err.name === "AbortError" ? "连接超时" : err.message;
+    const reason =
+      err.name === "AbortError"
+        ? "连接超时"
+        : String(err.message).includes("403")
+        ? "没有管理员权限，审批失败"
+        : err.message;
     alert(`审批同步失败，稍后会自动重试：${reason}`);
   }
 }
@@ -449,16 +457,20 @@ function resetIdeaForm() {
 
 // ---------- Supabase 同步 ----------
 async function supabaseFetch(path, options = {}) {
+  const headers = {
+    apikey: SUPABASE_KEY,
+    Authorization: `Bearer ${SUPABASE_KEY}`,
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  const adminKey = sessionStorage.getItem(ADMIN_KEY_SESSION_KEY);
+  if (adminKey) headers["x-admin-key"] = adminKey;
+
   const res = await fetchWithTimeout(
     `${SUPABASE_URL}/rest/v1/${path}`,
     {
       ...options,
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
+      headers,
     },
     10000
   );
@@ -721,7 +733,10 @@ async function approveUpload(id) {
     });
   } catch (err) {
     console.warn("审批同步失败:", err);
-    alert("审批已保存在本机，云端同步失败，下次打开会自动重试");
+    const reason = String(err.message).includes("403")
+      ? "没有管理员权限，审批失败"
+      : "云端同步失败，下次打开会自动重试";
+    alert(`审批已保存在本机，${reason}`);
   }
 }
 

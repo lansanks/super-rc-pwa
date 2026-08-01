@@ -17,7 +17,59 @@
 ## 云端同步（Supabase）
 
 - idea、章节上传（未审批）、审批状态（未更新）都存储在 Supabase 免费项目里，跨浏览器/设备自动同步，无需任何令牌或登录操作。
-- 页面使用 Supabase 的公开 anon key（设计上就是公开的），任何能打开页面的人都可以提交/审批；需要收紧权限时后续可加管理员校验。
+- 页面使用 Supabase 的公开 anon key（设计上就是公开的），任何人都可以提交；**审批在数据库层校验管理员密钥**，只有持有有效密钥才能审批。
+
+### 数据库初始化（一次性，在 Supabase SQL Editor 执行）
+
+```sql
+create extension if not exists pgcrypto;
+
+create table if not exists admin_keys (
+  label text primary key,
+  hash text not null
+);
+
+insert into admin_keys (label, hash) values
+('默认管理员', '7d7d0d17366e43db60feb11894bd1f66f1c4130a269337a2e8efa2a77e4c3d05'),
+('管理员2', '51ca702ee72cda595840205e4667f98a88646dd17ce32a737d5e1528fd71b63f'),
+('管理员3', '571cae7c33da4e684bf13a481b7d6538b95805a1e4a5a77d12ee82cd3b81fe29'),
+('管理员4', 'da98ca8722a8b7d8f101c7439166f31a4d5f6466884d1c379f825f80bb07fe5d')
+on conflict (label) do nothing;
+
+alter table admin_keys enable row level security;
+create policy "admin_keys readable" on admin_keys for select using (true);
+
+drop policy if exists "ideas public update" on ideas;
+drop policy if exists "chapters public update" on uploaded_chapters;
+
+create policy "admin can update ideas" on ideas
+for update using (
+  exists (
+    select 1 from admin_keys k
+    where k.hash = encode(
+      digest(coalesce(current_setting('request.headers', true)::json->>'x-admin-key', ''), 'sha256'),
+      'hex'
+    )
+  )
+);
+
+create policy "admin can update chapters" on uploaded_chapters
+for update using (
+  exists (
+    select 1 from admin_keys k
+    where k.hash = encode(
+      digest(coalesce(current_setting('request.headers', true)::json->>'x-admin-key', ''), 'sha256'),
+      'hex'
+    )
+  )
+);
+```
+
+### 以后新增管理员密钥
+
+1. `python3 tools/manage_keys.py add 新名字`
+2. 在小说项目根目录创建 `supabase_service_key.txt`（内容粘贴 Supabase 的 `service_role` key，只保存在本机，不要上传）
+3. 运行 `python3 tools/sync_admin_keys.py`
 
 ## 身份认证
 

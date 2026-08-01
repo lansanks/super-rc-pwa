@@ -318,7 +318,8 @@ ideaSubmitBtn.addEventListener("click", async () => {
     ideaModal.hidden = true;
   } catch (err) {
     console.warn("idea 同步失败:", err);
-    alert(`同步到 GitHub 失败，idea 已保存在本机：${err.message}`);
+    const reason = err.name === "AbortError" ? "连接超时" : err.message;
+    alert(`同步到 GitHub 失败，idea 已保存在本机：${reason}`);
   } finally {
     ideaSubmitBtn.disabled = false;
     ideaSubmitBtn.textContent = "提交";
@@ -412,7 +413,8 @@ async function approveIdea(id) {
     await pushIdeasToGitHub(ideas, `approve idea: ${idea.name}`, token);
   } catch (err) {
     console.warn("审批同步失败:", err);
-    alert(`审批同步到 GitHub 失败：${err.message}`);
+    const reason = err.name === "AbortError" ? "连接超时" : err.message;
+    alert(`审批同步到 GitHub 失败：${reason}`);
   }
 }
 
@@ -454,16 +456,34 @@ function ensureGitHubToken() {
 }
 
 async function fetchIdeasFromGitHub() {
-  const res = await fetch(
+  const urls = [
     `https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_FILE}`,
-    { cache: "no-store" }
+    `https://cdn.jsdelivr.net/gh/${GH_OWNER}/${GH_REPO}@${GH_BRANCH}/${GH_FILE}`,
+  ];
+  let lastError;
+
+  for (const url of urls) {
+    try {
+      const res = await fetchWithTimeout(url, {}, 8000);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      // 保留本机还没同步上去的 idea，后续提交时一起合并写入 GitHub
+      ideas = mergeIdeas(Array.isArray(data) ? data : [], ideas);
+      saveList(IDEAS_CACHE_KEY, ideas);
+      return ideas;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
+function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() =>
+    clearTimeout(timer)
   );
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  // 保留本机还没同步上去的 idea，后续提交时一起合并写入 GitHub
-  ideas = mergeIdeas(Array.isArray(data) ? data : [], ideas);
-  saveList(IDEAS_CACHE_KEY, ideas);
-  return ideas;
 }
 
 function migrateLocalIdeas() {
@@ -488,7 +508,7 @@ async function pushIdeasToGitHub(updatedIdeas, message, token) {
   };
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const readRes = await fetch(api, { headers });
+    const readRes = await fetchWithTimeout(api, { headers }, 10000);
     if (!readRes.ok) throw new Error(`读取仓库文件失败(${readRes.status})`);
     const info = await readRes.json();
     const existing = JSON.parse(decodeBase64(info.content));
@@ -500,11 +520,15 @@ async function pushIdeasToGitHub(updatedIdeas, message, token) {
       sha: info.sha,
       branch: GH_BRANCH,
     };
-    const putRes = await fetch(api, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify(body),
-    });
+    const putRes = await fetchWithTimeout(
+      api,
+      {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(body),
+      },
+      10000
+    );
     if (putRes.ok) return putRes.json();
     if (putRes.status === 409) continue; // 并发冲突，重读重试
     const errData = await putRes.json().catch(() => ({}));

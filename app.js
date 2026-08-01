@@ -107,18 +107,6 @@ charactersBackBtn.addEventListener("click", () => {
 charactersBtn.addEventListener("click", async () => {
   main.classList.remove("active");
   charactersScreen.classList.add("active");
-  charactersBody.hidden = true;
-
-  if (window.initCharacterGraph) {
-    try {
-      await window.initCharacterGraph();
-      return;
-    } catch (err) {
-      console.warn("3D 星图初始化失败，回退为列表:", err);
-    }
-  }
-
-  charactersBody.hidden = false;
   charactersBody.innerHTML = '<p class="empty">加载中…</p>';
   try {
     const res = await fetchWithTimeout("./人物设定.md", {}, 8000);

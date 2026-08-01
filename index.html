@@ -150,23 +150,15 @@
     <article class="reader-body" id="readerBody"></article>
   </section>
 
-  <!-- 人物设定界面（3D 星图） -->
+  <!-- 人物设定界面 -->
   <section id="charactersScreen" class="screen">
-    <div class="char3d-wrap" id="char3dWrap">
-      <div class="char3d-header">
-        <button class="back char3d-back" id="charactersBackBtn" aria-label="返回">‹</button>
-        <h2 class="char3d-title">人物设定</h2>
-      </div>
-      <div class="char3d-stage" id="char3d"></div>
-      <div class="characters-body fallback" id="charactersBody" hidden></div>
-      <p class="char3d-hint">拖动旋转 · 双指缩放 · 点击光点查看</p>
-      <div class="char-detail" id="charDetail" hidden></div>
+    <div class="characters-header">
+      <button class="back" id="charactersBackBtn" aria-label="返回">‹</button>
+      <h2 class="characters-title">人物设定</h2>
     </div>
+    <article class="characters-body" id="charactersBody"></article>
   </section>
 
-  <script src="vendor/three.min.js"></script>
-  <script src="vendor/OrbitControls.js"></script>
   <script src="app.js"></script>
-  <script src="characters3d.js"></script>
 </body>
 </html>

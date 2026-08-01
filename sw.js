@@ -1,4 +1,4 @@
-const CACHE_NAME = "super-rc-v8";
+const CACHE_NAME = "super-rc-v9";
 const ASSETS = [
   "./",
   "./index.html",

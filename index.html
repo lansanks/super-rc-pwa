@@ -52,10 +52,17 @@
     <button class="admin-badge" id="adminBadge" hidden>管理员</button>
 
     <div class="content">
-      <button class="upload-box" id="uploadBtn">
-        <span class="plus">+</span>
-        <span class="upload-text">点击上传</span>
-      </button>
+      <div class="upload-area">
+        <div class="idea-grid">
+          <button class="idea-block" id="provideIdeaBtn">提供idea</button>
+          <button class="idea-block" id="previewIdeaBtn">idea预览</button>
+        </div>
+
+        <button class="upload-box" id="uploadBtn">
+          <span class="plus">+</span>
+          <span class="upload-text">点击上传</span>
+        </button>
+      </div>
 
       <div class="chapter-section">
         <div class="tabs" id="chapterTabs">
@@ -97,6 +104,40 @@
       <div class="modal-actions">
         <button class="btn ghost" id="cancelUpload">取消</button>
         <button class="btn solid" id="confirmUpload">确认上传</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提供 idea 弹窗 -->
+  <div class="modal-mask" id="ideaModal" hidden>
+    <div class="modal">
+      <h3 class="modal-title">提供 idea</h3>
+
+      <label class="field">
+        <span class="field-label">姓名</span>
+        <input type="text" id="ideaNameInput" placeholder="请输入姓名" maxlength="20" />
+      </label>
+
+      <label class="field">
+        <span class="field-label">内容（50字以内）</span>
+        <textarea id="ideaTextInput" maxlength="50" rows="3" placeholder="写下你的 idea"></textarea>
+        <span class="char-count" id="ideaCharCount">0/50</span>
+      </label>
+
+      <div class="modal-actions">
+        <button class="btn ghost" id="ideaCancelBtn">取消</button>
+        <button class="btn solid" id="ideaSubmitBtn">提交</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- idea 预览弹窗 -->
+  <div class="modal-mask" id="ideaPreviewModal" hidden>
+    <div class="modal">
+      <h3 class="modal-title">idea 预览</h3>
+      <div class="preview-list" id="ideaPreviewList"></div>
+      <div class="modal-actions">
+        <button class="btn solid" id="ideaPreviewCloseBtn">关闭</button>
       </div>
     </div>
   </div>

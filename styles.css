@@ -163,6 +163,33 @@ button {
   padding-top: 20px;
 }
 
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.idea-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.idea-block {
+  padding: 22px 0;
+  border: 1.5px dashed var(--muted);
+  border-radius: 16px;
+  font-size: 15px;
+  letter-spacing: 2px;
+  color: var(--ink);
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.idea-block:active {
+  background: rgba(26, 26, 26, 0.05);
+  transform: scale(0.99);
+}
+
 .upload-box {
   width: 100%;
   aspect-ratio: 16 / 7;
@@ -348,6 +375,36 @@ button {
   border-color: rgba(26, 26, 26, 0.5);
 }
 
+.field textarea {
+  width: 100%;
+  min-height: 96px;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  outline: none;
+  resize: none;
+  line-height: 1.6;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.field textarea:focus {
+  border-color: rgba(26, 26, 26, 0.5);
+}
+
+.char-count {
+  display: block;
+  text-align: right;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
 .key-form .field input[type="password"] {
   font-size: 18px;
   letter-spacing: 3px;
@@ -383,6 +440,74 @@ button {
   display: flex;
   gap: 12px;
   margin-top: 24px;
+}
+
+.preview-list {
+  max-height: 55vh;
+  overflow-y: auto;
+  margin: 4px 0 20px;
+}
+
+.idea-item {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+.idea-item.pending {
+  color: rgba(26, 26, 26, 0.25);
+  background: rgba(26, 26, 26, 0.03);
+}
+
+.idea-item.approved {
+  color: var(--ink);
+}
+
+.idea-text {
+  font-size: 15px;
+  line-height: 1.6;
+  letter-spacing: 0.5px;
+  word-break: break-word;
+}
+
+.idea-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+
+.idea-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status {
+  color: rgba(26, 26, 26, 0.22);
+}
+
+.idea-item.approved .status {
+  color: var(--ink);
+}
+
+.idea-approve {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--bg);
+  background: var(--ink);
+}
+
+.idea-approve:active {
+  opacity: 0.8;
 }
 
 .btn {

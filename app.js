@@ -38,14 +38,28 @@ const fileNameText = document.getElementById("fileNameText");
 const cancelUploadBtn = document.getElementById("cancelUpload");
 const confirmUploadBtn = document.getElementById("confirmUpload");
 
+const provideIdeaBtn = document.getElementById("provideIdeaBtn");
+const previewIdeaBtn = document.getElementById("previewIdeaBtn");
+const ideaModal = document.getElementById("ideaModal");
+const ideaNameInput = document.getElementById("ideaNameInput");
+const ideaTextInput = document.getElementById("ideaTextInput");
+const ideaCharCount = document.getElementById("ideaCharCount");
+const ideaCancelBtn = document.getElementById("ideaCancelBtn");
+const ideaSubmitBtn = document.getElementById("ideaSubmitBtn");
+const ideaPreviewModal = document.getElementById("ideaPreviewModal");
+const ideaPreviewList = document.getElementById("ideaPreviewList");
+const ideaPreviewCloseBtn = document.getElementById("ideaPreviewCloseBtn");
+
 // ---------- 数据 ----------
 const UPLOADS_KEY = "super-rc-uploads-v1";
 const APPROVED_KEY = "super-rc-approved-v1";
+const IDEAS_KEY = "super-rc-ideas-v1";
 const ADMIN_SESSION_KEY = "super-rc-admin";
 
 let allChapters = [];
 let uploads = loadList(UPLOADS_KEY);
 let approvedUploads = loadList(APPROVED_KEY);
+let ideas = loadList(IDEAS_KEY);
 let isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
 
 // ---------- 导航 ----------
@@ -238,6 +252,133 @@ confirmUploadBtn.addEventListener("click", () => {
   fileReader.onerror = () => alert("文件读取失败，请重试");
   fileReader.readAsText(file, "utf-8");
 });
+
+// ---------- idea ----------
+provideIdeaBtn.addEventListener("click", () => {
+  resetIdeaForm();
+  ideaModal.hidden = false;
+});
+
+ideaCancelBtn.addEventListener("click", () => {
+  ideaModal.hidden = true;
+});
+
+ideaModal.addEventListener("click", (event) => {
+  if (event.target === ideaModal) ideaModal.hidden = true;
+});
+
+ideaTextInput.addEventListener("input", () => {
+  ideaCharCount.textContent = `${ideaTextInput.value.length}/50`;
+});
+
+ideaSubmitBtn.addEventListener("click", () => {
+  const name = ideaNameInput.value.trim();
+  const text = ideaTextInput.value.trim();
+
+  if (!name) {
+    alert("请填写姓名");
+    return;
+  }
+  if (!text) {
+    alert("请填写 idea 内容");
+    return;
+  }
+  if (text.length > 50) {
+    alert("idea 内容不能超过 50 字");
+    return;
+  }
+
+  ideas.unshift({
+    id: `i-${Date.now()}`,
+    name,
+    text,
+    approved: false,
+    createdAt: new Date().toISOString(),
+  });
+  saveList(IDEAS_KEY, ideas);
+  resetIdeaForm();
+  ideaModal.hidden = true;
+});
+
+previewIdeaBtn.addEventListener("click", () => {
+  renderIdeas();
+  ideaPreviewModal.hidden = false;
+});
+
+ideaPreviewCloseBtn.addEventListener("click", () => {
+  ideaPreviewModal.hidden = true;
+});
+
+ideaPreviewModal.addEventListener("click", (event) => {
+  if (event.target === ideaPreviewModal) ideaPreviewModal.hidden = true;
+});
+
+function renderIdeas() {
+  ideaPreviewList.innerHTML = "";
+
+  if (!ideas.length) {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = "暂无 idea";
+    ideaPreviewList.appendChild(p);
+    return;
+  }
+
+  for (const idea of ideas) {
+    const item = document.createElement("div");
+    item.className = idea.approved ? "idea-item approved" : "idea-item pending";
+
+    const text = document.createElement("p");
+    text.className = "idea-text";
+    text.textContent = idea.text;
+
+    const meta = document.createElement("div");
+    meta.className = "idea-meta";
+
+    const name = document.createElement("span");
+    name.className = "idea-name";
+    name.textContent = idea.name;
+
+    const actions = document.createElement("span");
+    actions.className = "idea-actions";
+
+    const status = document.createElement("span");
+    status.className = "status";
+    status.textContent = idea.approved ? "已通过" : "待审批";
+
+    actions.appendChild(status);
+
+    if (isAdmin && !idea.approved) {
+      const approveBtn = document.createElement("button");
+      approveBtn.className = "idea-approve";
+      approveBtn.textContent = "审批";
+      approveBtn.addEventListener("click", () => approveIdea(idea.id));
+      actions.appendChild(approveBtn);
+    }
+
+    meta.appendChild(name);
+    meta.appendChild(actions);
+    item.appendChild(text);
+    item.appendChild(meta);
+    ideaPreviewList.appendChild(item);
+  }
+}
+
+function approveIdea(id) {
+  const idea = ideas.find((item) => item.id === id);
+  if (!idea || idea.approved) return;
+  if (!confirm(`通过「${idea.name}」的 idea？`)) return;
+  idea.approved = true;
+  idea.approvedAt = new Date().toISOString();
+  saveList(IDEAS_KEY, ideas);
+  renderIdeas();
+}
+
+function resetIdeaForm() {
+  ideaNameInput.value = "";
+  ideaTextInput.value = "";
+  ideaCharCount.textContent = "0/50";
+}
 
 // ---------- 列表渲染 ----------
 async function loadChapters() {

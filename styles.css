@@ -126,12 +126,34 @@ button {
   flex: 1;
 }
 
-.section-title {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  padding-bottom: 12px;
+.tabs {
+  display: flex;
   border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  flex: 1;
+  padding: 12px 0 10px;
+  text-align: center;
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s ease;
+}
+
+.tab.active {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--ink);
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
 }
 
 .chapter-list {
@@ -172,6 +194,118 @@ button {
   font-size: 13px;
   letter-spacing: 3px;
   color: rgba(26, 26, 26, 0.22);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ---------- 上传弹窗 ---------- */
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(26, 26, 26, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal {
+  width: 100%;
+  max-width: 360px;
+  background: #fff;
+  border-radius: 18px;
+  padding: 24px;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.field input[type="text"],
+.field input[type="number"] {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.field input:focus {
+  border-color: rgba(26, 26, 26, 0.5);
+}
+
+.file-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  border: 1px dashed var(--muted);
+  border-radius: 12px;
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 10px;
+  text-align: center;
+}
+
+.file-picker.filled {
+  color: var(--ink);
+  border-color: rgba(26, 26, 26, 0.3);
+}
+
+.file-picker input[type="file"] {
+  display: none;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 15px;
+  letter-spacing: 2px;
+}
+
+.btn.solid {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.btn.ghost {
+  border: 1px solid rgba(26, 26, 26, 0.2);
+  color: var(--muted);
 }
 
 /* ---------- 阅读页 ---------- */

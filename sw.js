@@ -1,4 +1,4 @@
-const CACHE_NAME = "super-rc-v9";
+const CACHE_NAME = "super-rc-v10";
 const ASSETS = [
   "./",
   "./index.html",
@@ -37,6 +37,15 @@ self.addEventListener("activate", (event) => {
         Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
       )
       .then(() => self.clients.claim())
+      .then(() =>
+        self.clients
+          .matchAll({ type: "window", includeUncontrolled: true })
+          .then((clients) =>
+            Promise.all(
+              clients.map((client) => client.navigate(client.url).catch(() => {}))
+            )
+          )
+      )
   );
 });
 
@@ -50,6 +59,32 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // 应用外壳：网络优先，确保更新立即生效；离线时回退缓存
+  const isShell =
+    event.request.mode === "navigate" ||
+    url.pathname.endsWith("/index.html") ||
+    url.pathname.endsWith("/styles.css") ||
+    url.pathname.endsWith("/app.js") ||
+    url.pathname.endsWith("/manifest.webmanifest") ||
+    url.pathname.endsWith("/chapters.json");
+
+  if (isShell) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches
+            .open(CACHE_NAME)
+            .then((cache) => cache.put(event.request, copy))
+            .catch(() => {});
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // 其余资源（章节正文、图标）：缓存优先，离线可用
   event.respondWith(
     caches.match(event.request).then(
       (cached) =>

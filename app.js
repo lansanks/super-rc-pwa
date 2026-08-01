@@ -21,6 +21,10 @@ const readerScreen = document.getElementById("reader");
 const readerBackBtn = document.getElementById("readerBackBtn");
 const readerTitle = document.getElementById("readerTitle");
 const readerBody = document.getElementById("readerBody");
+const charactersBtn = document.getElementById("charactersBtn");
+const charactersScreen = document.getElementById("charactersScreen");
+const charactersBackBtn = document.getElementById("charactersBackBtn");
+const charactersBody = document.getElementById("charactersBody");
 
 const tabs = document.querySelectorAll(".tab");
 const tabPanels = {
@@ -92,6 +96,26 @@ backBtn.addEventListener("click", () => {
 readerBackBtn.addEventListener("click", () => {
   readerScreen.classList.remove("active");
   main.classList.add("active");
+});
+
+// 人物设定页
+charactersBackBtn.addEventListener("click", () => {
+  charactersScreen.classList.remove("active");
+  main.classList.add("active");
+});
+
+charactersBtn.addEventListener("click", async () => {
+  main.classList.remove("active");
+  charactersScreen.classList.add("active");
+  charactersBody.innerHTML = '<p class="empty">加载中…</p>';
+  try {
+    const res = await fetchWithTimeout("./人物设定.md", {}, 8000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    renderCharacters(await res.text());
+  } catch (err) {
+    console.warn("人物设定加载失败:", err);
+    charactersBody.innerHTML = '<p class="empty">人物设定加载失败，请稍后重试</p>';
+  }
 });
 
 function enterMain() {
@@ -181,6 +205,228 @@ adminBadge.addEventListener("click", () => {
 
 function updateAdminBadge() {
   adminBadge.hidden = !isAdmin;
+}
+
+// ---------- 人物设定 ----------
+function renderCharacters(md) {
+  const { sections, meta } = parseCharacters(md);
+  charactersBody.innerHTML = "";
+  const frag = document.createDocumentFragment();
+
+  if (meta) {
+    const metaEl = document.createElement("p");
+    metaEl.className = "chars-meta";
+    metaEl.textContent = meta;
+    frag.appendChild(metaEl);
+  }
+
+  for (const section of sections) {
+    const head = document.createElement("h3");
+    head.className = "section-head";
+    head.textContent = section.title;
+    frag.appendChild(head);
+
+    for (const ch of section.characters) {
+      frag.appendChild(buildCharacterCard(ch));
+    }
+    if (section.robots.length) {
+      frag.appendChild(buildRobotTable(section.robots));
+    }
+    for (const row of buildRelationRows(section.relations)) {
+      frag.appendChild(row);
+    }
+    section.mysteries.forEach((m, i) => {
+      const item = document.createElement("div");
+      item.className = "mystery-item";
+      const idx = document.createElement("span");
+      idx.className = "mystery-index";
+      idx.textContent = `${i + 1}.`;
+      const text = document.createElement("span");
+      text.textContent = m;
+      item.appendChild(idx);
+      item.appendChild(text);
+      frag.appendChild(item);
+    });
+  }
+
+  charactersBody.appendChild(frag);
+}
+
+function parseCharacters(md) {
+  const sections = [];
+  let current = null;
+  let character = null;
+  let meta = "";
+
+  for (const raw of md.split("\n")) {
+    const line = raw.trimEnd();
+    if (line.startsWith("## ")) {
+      current = {
+        title: line.slice(3).trim().replace(/^[一二三四五六七八九十]+、/, ""),
+        characters: [],
+        robots: [],
+        relations: [],
+        mysteries: [],
+      };
+      sections.push(current);
+      character = null;
+      continue;
+    }
+    if (!current) {
+      if (line.startsWith("更新时间")) meta = line;
+      continue;
+    }
+    if (line.startsWith("### ")) {
+      character = { title: line.slice(4).trim(), fields: [], paragraphs: [] };
+      current.characters.push(character);
+      continue;
+    }
+    if (current.title.includes("机器人") && line.startsWith("|")) {
+      const cells = line
+        .split("|")
+        .slice(1, -1)
+        .map((c) => c.trim());
+      if (
+        cells.length >= 4 &&
+        cells[0] !== "名称" &&
+        !/^[-:]+$/.test(cells.join(""))
+      ) {
+        current.robots.push({
+          name: cells[0],
+          type: cells[1],
+          owner: cells[2],
+          status: cells[3],
+        });
+      }
+      continue;
+    }
+    if (current.title.includes("关系") && line.includes("──")) {
+      current.relations.push(line.trim());
+      continue;
+    }
+    if (current.title.includes("悬念")) {
+      const m = line.match(/^\d+\.\s*(.*)/);
+      if (m) current.mysteries.push(m[1]);
+      continue;
+    }
+    const field = line.match(/^[-*]\s+\*\*([^*]+)\*\*[：:]\s*(.*)/);
+    if (field && character) {
+      character.fields.push({ key: field[1].trim(), value: field[2].trim() });
+      continue;
+    }
+    const plain = line.replace(/^[-*]\s+/, "").trim();
+    if (plain && character && !plain.startsWith("#")) {
+      character.paragraphs.push(plain);
+    }
+  }
+
+  return { sections, meta };
+}
+
+function buildCharacterCard(ch) {
+  const card = document.createElement("article");
+  card.className = "char-card";
+
+  const head = document.createElement("header");
+  head.className = "char-head";
+
+  const name = document.createElement("h4");
+  name.className = "char-name";
+  const sub = document.createElement("span");
+  sub.className = "char-sub";
+
+  const match = ch.title.match(/^(.*?)（(.*)）$/);
+  name.textContent = match ? match[1] : ch.title;
+  sub.textContent = match ? match[2] : "";
+
+  head.appendChild(name);
+  if (sub.textContent) head.appendChild(sub);
+  card.appendChild(head);
+
+  const fields = document.createElement("div");
+  fields.className = "char-fields";
+  for (const f of ch.fields) {
+    const row = document.createElement("div");
+    row.className = "char-field";
+    const key = document.createElement("span");
+    key.className = "char-key";
+    key.textContent = f.key;
+    const value = document.createElement("span");
+    value.className = "char-value";
+    value.textContent = f.value;
+    row.appendChild(key);
+    row.appendChild(value);
+    fields.appendChild(row);
+  }
+  card.appendChild(fields);
+
+  for (const p of ch.paragraphs) {
+    const para = document.createElement("p");
+    para.className = "char-para";
+    para.textContent = p;
+    card.appendChild(para);
+  }
+
+  return card;
+}
+
+function buildRobotTable(robots) {
+  const wrap = document.createElement("div");
+  wrap.className = "robot-wrap";
+
+  const head = document.createElement("div");
+  head.className = "robot-grid head";
+  ["名称", "类型", "归属", "状态"].forEach((t) => {
+    const span = document.createElement("span");
+    span.textContent = t;
+    head.appendChild(span);
+  });
+  wrap.appendChild(head);
+
+  for (const r of robots) {
+    const row = document.createElement("div");
+    row.className = "robot-grid";
+    [r.name, r.type, r.owner, r.status].forEach((v) => {
+      const span = document.createElement("span");
+      span.textContent = v;
+      row.appendChild(span);
+    });
+    wrap.appendChild(row);
+  }
+
+  return wrap;
+}
+
+function buildRelationRows(lines) {
+  const rows = [];
+  for (const line of lines) {
+    const parts = line
+      .split("──")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (let i = 0; i + 2 < parts.length; i += 2) {
+      const row = document.createElement("div");
+      row.className = "rel-row";
+
+      const a = document.createElement("span");
+      a.className = "rel-a";
+      a.textContent = parts[i];
+
+      const edge = document.createElement("span");
+      edge.className = "rel-edge";
+      edge.textContent = parts[i + 1];
+
+      const b = document.createElement("span");
+      b.className = "rel-b";
+      b.textContent = parts[i + 2];
+
+      row.appendChild(a);
+      row.appendChild(edge);
+      row.appendChild(b);
+      rows.push(row);
+    }
+  }
+  return rows;
 }
 
 // ---------- 栏目切换 ----------

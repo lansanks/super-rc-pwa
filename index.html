@@ -52,13 +52,11 @@
     <button class="admin-badge" id="adminBadge" hidden>管理员</button>
 
     <div class="content">
-      <div class="upload-area">
-        <div class="idea-grid">
-          <button class="idea-block" id="provideIdeaBtn">提供idea</button>
-          <button class="idea-block" id="previewIdeaBtn">idea预览</button>
-        </div>
-
-        <button class="upload-box" id="uploadBtn">
+      <div class="idea-grid">
+        <button class="idea-block" id="provideIdeaBtn">提供idea</button>
+        <button class="idea-block" id="previewIdeaBtn">idea预览</button>
+        <button class="idea-block" id="charactersBtn">人物设定</button>
+        <button class="idea-block" id="uploadBtn">
           <span class="plus">+</span>
           <span class="upload-text">点击上传</span>
         </button>
@@ -150,6 +148,15 @@
       <h2 class="reader-title" id="readerTitle"></h2>
     </div>
     <article class="reader-body" id="readerBody"></article>
+  </section>
+
+  <!-- 人物设定界面 -->
+  <section id="charactersScreen" class="screen">
+    <div class="characters-header">
+      <button class="back" id="charactersBackBtn" aria-label="返回">‹</button>
+      <h2 class="characters-title">人物设定</h2>
+    </div>
+    <article class="characters-body" id="charactersBody"></article>
   </section>
 
   <script src="app.js"></script>

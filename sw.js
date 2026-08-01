@@ -1,4 +1,4 @@
-const CACHE_NAME = "super-rc-v16";
+const CACHE_NAME = "super-rc-v17";
 const ASSETS = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const ASSETS = [
   "./app.js",
   "./manifest.webmanifest",
   "./chapters.json",
+  "./人物设定.md",
   "./chapters/第01章-最后一秒.md",
   "./chapters/第02章-退队通知.md",
   "./chapters/第03章-第一台车.md",

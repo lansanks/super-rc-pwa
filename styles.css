@@ -139,10 +139,31 @@ button {
 }
 
 .chapter-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 16px 2px;
   font-size: 15px;
   letter-spacing: 1px;
   border-bottom: 1px solid var(--line);
+}
+
+.chapter-item.clickable {
+  cursor: pointer;
+}
+
+.chapter-item.clickable:active {
+  background: rgba(26, 26, 26, 0.04);
+}
+
+.chapter-item.locked {
+  color: rgba(26, 26, 26, 0.25);
+}
+
+.lock-hint {
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: rgba(26, 26, 26, 0.22);
 }
 
 .empty {
@@ -151,4 +172,39 @@ button {
   font-size: 13px;
   letter-spacing: 3px;
   color: rgba(26, 26, 26, 0.22);
+}
+
+/* ---------- 阅读页 ---------- */
+
+#reader {
+  padding: calc(env(safe-area-inset-top, 0px) + 16px) 24px
+    calc(env(safe-area-inset-bottom, 0px) + 24px);
+}
+
+.reader-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.reader-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 1px;
+}
+
+.reader-body {
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 20px;
+  padding-bottom: 40px;
+  font-size: 16px;
+  line-height: 1.9;
+  letter-spacing: 0.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

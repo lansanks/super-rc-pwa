@@ -259,17 +259,7 @@ confirmUploadBtn.addEventListener("click", () => {
       await supabaseFetch("uploaded_chapters", {
         method: "POST",
         headers: { Prefer: "return=representation" },
-        body: JSON.stringify([
-          {
-            id: upload.id,
-            number: upload.number,
-            name: upload.name,
-            file_name: upload.fileName,
-            content: upload.content,
-            status: "pending",
-            created_at: upload.uploadedAt,
-          },
-        ]),
+        body: JSON.stringify([toChapterRow(upload)]),
       });
     } catch (err) {
       console.warn("章节同步失败:", err);
@@ -332,7 +322,7 @@ ideaSubmitBtn.addEventListener("click", async () => {
     await supabaseFetch("ideas", {
       method: "POST",
       headers: { Prefer: "return=representation" },
-      body: JSON.stringify([idea]),
+      body: JSON.stringify([toIdeaRow(idea)]),
     });
     resetIdeaForm();
     ideaModal.hidden = true;
@@ -482,6 +472,30 @@ async function supabaseFetch(path, options = {}) {
   return res.json();
 }
 
+function toIdeaRow(idea) {
+  return {
+    id: idea.id,
+    name: idea.name,
+    text: idea.text,
+    approved: Boolean(idea.approved),
+    created_at: idea.createdAt || idea.created_at || null,
+    approved_at: idea.approvedAt || idea.approved_at || null,
+  };
+}
+
+function toChapterRow(upload) {
+  return {
+    id: upload.id,
+    number: upload.number,
+    name: upload.name,
+    file_name: upload.file_name || upload.fileName || null,
+    content: upload.content,
+    status: upload.status || "pending",
+    created_at: upload.created_at || upload.uploadedAt || null,
+    approved_at: upload.approved_at || upload.approvedAt || null,
+  };
+}
+
 async function upsertRows(table, rows) {
   if (!rows.length) return;
   await supabaseFetch(table, {
@@ -502,7 +516,7 @@ async function fetchIdeasFromCloud() {
       (remote.approved_at || null) !== (local.approvedAt || null)
     );
   });
-  if (changed.length) await upsertRows("ideas", changed);
+  if (changed.length) await upsertRows("ideas", changed.map(toIdeaRow));
   ideas = mergeById(cloud, ideas);
   saveList(IDEAS_CACHE_KEY, ideas);
   return ideas;
@@ -520,7 +534,7 @@ async function fetchChaptersFromCloud() {
       (remote.approved_at || null) !== (local.approvedAt || null)
     );
   });
-  if (changed.length) await upsertRows("uploaded_chapters", changed);
+  if (changed.length) await upsertRows("uploaded_chapters", changed.map(toChapterRow));
 
   const merged = mergeById(cloud, localAll);
   uploads = merged.filter((item) => (item.status || "pending") === "pending");

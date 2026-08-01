@@ -337,10 +337,16 @@ function renderUploads() {
     li.appendChild(hint);
 
     if (isAdmin) {
+      li.classList.add("clickable");
+      li.addEventListener("click", () => openLocalChapter(upload));
+
       const approveBtn = document.createElement("button");
       approveBtn.className = "approve-btn";
       approveBtn.textContent = "审批";
-      approveBtn.addEventListener("click", () => approveUpload(upload.id));
+      approveBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        approveUpload(upload.id);
+      });
       li.appendChild(approveBtn);
     }
 

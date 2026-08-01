@@ -1,8 +1,22 @@
+// ---------- 页面元素 ----------
 const home = document.getElementById("home");
+const auth = document.getElementById("auth");
+const authBackBtn = document.getElementById("authBackBtn");
+const identityChoices = document.getElementById("identityChoices");
+const adminAuthBtn = document.getElementById("adminAuthBtn");
+const guestAuthBtn = document.getElementById("guestAuthBtn");
+const keyForm = document.getElementById("keyForm");
+const adminKeyInput = document.getElementById("adminKeyInput");
+const keyError = document.getElementById("keyError");
+const keyCancelBtn = document.getElementById("keyCancelBtn");
+const keySubmitBtn = document.getElementById("keySubmitBtn");
+
 const main = document.getElementById("main");
 const enterHint = document.querySelector(".enter-hint");
 const backBtn = document.getElementById("backBtn");
+const adminBadge = document.getElementById("adminBadge");
 const uploadBtn = document.getElementById("uploadBtn");
+
 const readerScreen = document.getElementById("reader");
 const readerBackBtn = document.getElementById("readerBackBtn");
 const readerTitle = document.getElementById("readerTitle");
@@ -24,28 +38,133 @@ const fileNameText = document.getElementById("fileNameText");
 const cancelUploadBtn = document.getElementById("cancelUpload");
 const confirmUploadBtn = document.getElementById("confirmUpload");
 
+// ---------- 数据 ----------
 const UPLOADS_KEY = "super-rc-uploads-v1";
-let uploads = loadUploads();
+const APPROVED_KEY = "super-rc-approved-v1";
+const ADMIN_SESSION_KEY = "super-rc-admin";
 
-// 首页 -> 主界面
+let allChapters = [];
+let uploads = loadList(UPLOADS_KEY);
+let approvedUploads = loadList(APPROVED_KEY);
+let isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+
+// ---------- 导航 ----------
 enterHint.addEventListener("click", () => {
-  home.classList.remove("active");
-  main.classList.add("active");
+  if (isAdmin) {
+    enterMain();
+  } else {
+    home.classList.remove("active");
+    auth.classList.add("active");
+  }
 });
 
-// 返回首页
+authBackBtn.addEventListener("click", () => {
+  auth.classList.remove("active");
+  home.classList.add("active");
+});
+
+guestAuthBtn.addEventListener("click", () => {
+  enterMain();
+});
+
 backBtn.addEventListener("click", () => {
   main.classList.remove("active");
   home.classList.add("active");
 });
 
-// 阅读页返回列表
 readerBackBtn.addEventListener("click", () => {
   readerScreen.classList.remove("active");
   main.classList.add("active");
 });
 
-// 栏目切换
+function enterMain() {
+  home.classList.remove("active");
+  auth.classList.remove("active");
+  main.classList.add("active");
+  renderAll();
+}
+
+// ---------- 管理员认证 ----------
+adminAuthBtn.addEventListener("click", () => {
+  identityChoices.hidden = true;
+  keyError.hidden = true;
+  keyForm.hidden = false;
+  adminKeyInput.value = "";
+  adminKeyInput.focus();
+});
+
+keyCancelBtn.addEventListener("click", () => {
+  keyForm.hidden = true;
+  identityChoices.hidden = false;
+});
+
+keyForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const key = adminKeyInput.value.trim();
+  if (!key) {
+    showKeyError("请输入密钥");
+    return;
+  }
+
+  keySubmitBtn.disabled = true;
+  keySubmitBtn.textContent = "验证中…";
+
+  try {
+    const ok = await verifyAdminKey(key);
+    if (ok) {
+      isAdmin = true;
+      sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
+      keyForm.hidden = true;
+      identityChoices.hidden = false;
+      enterMain();
+    } else {
+      showKeyError("密钥不正确");
+    }
+  } catch (err) {
+    console.warn("密钥验证失败:", err);
+    showKeyError("验证失败，请检查网络后重试");
+  } finally {
+    keySubmitBtn.disabled = false;
+    keySubmitBtn.textContent = "确认";
+  }
+});
+
+function showKeyError(message) {
+  keyError.textContent = message;
+  keyError.hidden = false;
+}
+
+async function verifyAdminKey(key) {
+  const res = await fetch("./admin-keys.json");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const entries = await res.json();
+  const hash = await sha256Hex(key);
+  return entries.some((entry) => entry.hash === hash);
+}
+
+async function sha256Hex(text) {
+  if (!crypto || !crypto.subtle) {
+    throw new Error("当前环境不支持密钥验证，需要 HTTPS");
+  }
+  const buffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// ---------- 管理员标识 ----------
+adminBadge.addEventListener("click", () => {
+  if (!confirm("退出管理员模式？")) return;
+  isAdmin = false;
+  sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  renderAll();
+});
+
+function updateAdminBadge() {
+  adminBadge.hidden = !isAdmin;
+}
+
+// ---------- 栏目切换 ----------
 tabs.forEach((tab) => {
   tab.addEventListener("click", () => setActiveTab(tab.dataset.tab));
 });
@@ -57,7 +176,7 @@ function setActiveTab(name) {
   });
 }
 
-// 上传弹窗
+// ---------- 上传弹窗 ----------
 uploadBtn.addEventListener("click", () => {
   resetUploadForm();
   uploadModal.hidden = false;
@@ -110,7 +229,7 @@ confirmUploadBtn.addEventListener("click", () => {
       uploadedAt: new Date().toISOString(),
     };
     uploads.unshift(upload);
-    saveUploads();
+    saveList(UPLOADS_KEY, uploads);
     renderUploads();
     resetUploadForm();
     uploadModal.hidden = true;
@@ -120,24 +239,24 @@ confirmUploadBtn.addEventListener("click", () => {
   fileReader.readAsText(file, "utf-8");
 });
 
-// 加载章节列表
+// ---------- 列表渲染 ----------
 async function loadChapters() {
   try {
     const res = await fetch("./chapters.json");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const chapters = await res.json();
-    renderChapters(chapters);
-    renderUploads();
+    allChapters = await res.json();
   } catch (err) {
     console.warn("加载章节列表失败:", err);
-    renderChapters([]);
-    renderUploads();
+    allChapters = [];
   }
+  renderAll();
 }
 
-function renderChapters(chapters) {
-  renderAvailable(chapters);
-  renderPending(chapters);
+function renderAll() {
+  renderAvailable(allChapters);
+  renderPending(allChapters);
+  renderUploads();
+  updateAdminBadge();
 }
 
 function renderAvailable(chapters) {
@@ -160,15 +279,37 @@ function renderAvailable(chapters) {
 function renderPending(chapters) {
   const list = tabPanels.pending;
   list.innerHTML = "";
-  const locked = chapters.slice(4);
+  const repoLocked = chapters.slice(4);
 
-  if (!locked.length) {
+  if (!repoLocked.length && !approvedUploads.length) {
     appendEmpty(list, "暂无未更新章节");
     return;
   }
 
-  for (const chapter of locked) {
-    list.appendChild(makeChapterItem(chapter, { locked: true, hint: "未更新" }));
+  for (const chapter of repoLocked) {
+    const li = makeChapterItem(chapter, { locked: !isAdmin, hint: "未更新" });
+    if (isAdmin) {
+      li.classList.add("clickable");
+      li.addEventListener("click", () => openChapter(chapter));
+    }
+    list.appendChild(li);
+  }
+
+  for (const upload of approvedUploads) {
+    const li = document.createElement("li");
+    li.className = isAdmin ? "chapter-item clickable" : "chapter-item locked";
+
+    const text = document.createElement("span");
+    text.textContent = `第${upload.number}章 ${upload.name}`;
+
+    const hint = document.createElement("span");
+    hint.className = "lock-hint";
+    hint.textContent = "未更新";
+
+    li.appendChild(text);
+    li.appendChild(hint);
+    if (isAdmin) li.addEventListener("click", () => openLocalChapter(upload));
+    list.appendChild(li);
   }
 }
 
@@ -194,8 +335,34 @@ function renderUploads() {
 
     li.appendChild(text);
     li.appendChild(hint);
+
+    if (isAdmin) {
+      const approveBtn = document.createElement("button");
+      approveBtn.className = "approve-btn";
+      approveBtn.textContent = "审批";
+      approveBtn.addEventListener("click", () => approveUpload(upload.id));
+      li.appendChild(approveBtn);
+    }
+
     list.appendChild(li);
   }
+}
+
+function approveUpload(id) {
+  const index = uploads.findIndex((upload) => upload.id === id);
+  if (index === -1) return;
+  const upload = uploads[index];
+  if (!confirm(`审批通过「第${upload.number}章 ${upload.name}」，将进入“未更新”，确认？`)) {
+    return;
+  }
+
+  uploads.splice(index, 1);
+  upload.approvedAt = new Date().toISOString();
+  approvedUploads.unshift(upload);
+  saveList(UPLOADS_KEY, uploads);
+  saveList(APPROVED_KEY, approvedUploads);
+  renderUploads();
+  renderPending(allChapters);
 }
 
 function makeChapterItem(chapter, { clickable = false, locked = false, hint = "" } = {}) {
@@ -225,56 +392,68 @@ function appendEmpty(list, text) {
   list.appendChild(li);
 }
 
+// ---------- 本地存储 ----------
+function loadList(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key)) || [];
+  } catch (err) {
+    console.warn(`读取本地数据失败: ${key}`, err);
+    return [];
+  }
+}
+
+function saveList(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (err) {
+    console.warn(`保存本地数据失败: ${key}`, err);
+  }
+}
+
 function resetUploadForm() {
   chapterNameInput.value = "";
   chapterNumberInput.value = "";
   chapterFileInput.value = "";
   fileNameText.textContent = "选择 .md 文件";
-  fileNameText.classList.remove("filled");
+  filePicker.classList.remove("filled");
 }
 
-function loadUploads() {
-  try {
-    return JSON.parse(localStorage.getItem(UPLOADS_KEY)) || [];
-  } catch (err) {
-    console.warn("读取本地上传记录失败:", err);
-    return [];
-  }
-}
-
-function saveUploads() {
-  try {
-    localStorage.setItem(UPLOADS_KEY, JSON.stringify(uploads));
-  } catch (err) {
-    console.warn("保存上传章节失败:", err);
-  }
-}
-
-// 进入阅读页并加载章节正文
+// ---------- 阅读 ----------
 async function openChapter(chapter) {
+  openReader(chapter.title, `./${chapter.file}`);
+}
+
+async function openLocalChapter(upload) {
+  openReader(`第${upload.number}章 ${upload.name}`, null, upload.content);
+}
+
+async function openReader(fallbackTitle, fileUrl, inlineContent) {
   main.classList.remove("active");
   readerScreen.classList.add("active");
   readerTitle.textContent = "加载中…";
   readerBody.textContent = "";
 
   try {
-    const res = await fetch(`./${chapter.file}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
+    let text = inlineContent;
+    if (text == null) {
+      const res = await fetch(fileUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      text = await res.text();
+    }
 
     const heading = text.match(/^#\s+(.+)$/m);
-    readerTitle.textContent = heading ? heading[1] : chapter.title;
+    readerTitle.textContent = heading ? heading[1] : fallbackTitle;
     readerBody.textContent = text.replace(/^#\s+.+\n?/, "").trimStart();
   } catch (err) {
     console.warn("加载章节失败:", err);
-    readerTitle.textContent = chapter.title;
+    readerTitle.textContent = fallbackTitle;
     readerBody.textContent = "章节加载失败，请稍后重试。";
   }
 }
 
 loadChapters();
 
-// PWA Service Worker
+// ---------- PWA ----------
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker

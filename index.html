@@ -20,9 +20,36 @@
     </div>
   </section>
 
+  <!-- 身份选择 -->
+  <section id="auth" class="screen">
+    <button class="back" id="authBackBtn" aria-label="返回">‹</button>
+
+    <div class="auth-inner">
+      <h2 class="auth-title">选择身份</h2>
+
+      <div class="auth-choices" id="identityChoices">
+        <button class="auth-btn" id="adminAuthBtn">管理员认证</button>
+        <button class="auth-btn auth-btn-ghost" id="guestAuthBtn">游客访问</button>
+      </div>
+
+      <form class="key-form" id="keyForm" hidden>
+        <label class="field">
+          <span class="field-label">管理员密钥</span>
+          <input type="password" id="adminKeyInput" placeholder="请输入密钥" autocomplete="off" />
+        </label>
+        <p class="key-error" id="keyError" hidden></p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" id="keyCancelBtn">取消</button>
+          <button type="submit" class="btn solid" id="keySubmitBtn">确认</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
   <!-- 主界面 -->
   <section id="main" class="screen">
     <button class="back" id="backBtn" aria-label="返回">‹</button>
+    <button class="admin-badge" id="adminBadge" hidden>管理员</button>
 
     <div class="content">
       <button class="upload-box" id="uploadBtn">

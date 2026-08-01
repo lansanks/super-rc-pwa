@@ -1,4 +1,4 @@
-const CACHE_NAME = "super-rc-v4";
+const CACHE_NAME = "super-rc-v5";
 const ASSETS = [
   "./",
   "./index.html",
@@ -36,6 +36,14 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+
+  // 密钥列表不缓存，始终优先获取最新版本
+  if (url.pathname.endsWith("/admin-keys.json")) {
+    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(
       (cached) =>

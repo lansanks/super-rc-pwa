@@ -150,15 +150,21 @@
     <article class="reader-body" id="readerBody"></article>
   </section>
 
-  <!-- 人物设定界面 -->
+  <!-- 人物设定界面（平面关系图） -->
   <section id="charactersScreen" class="screen">
     <div class="characters-header">
       <button class="back" id="charactersBackBtn" aria-label="返回">‹</button>
       <h2 class="characters-title">人物设定</h2>
+      <span class="char2d-hint">拖动平移 · 滚轮/双指缩放 · 点击人物查看</span>
     </div>
-    <article class="characters-body" id="charactersBody"></article>
+    <div class="char2d-wrap">
+      <svg class="char2d-svg" id="char2dSvg"></svg>
+      <article class="characters-body fallback" id="charactersBody" hidden></article>
+      <aside class="char2d-detail" id="char2dDetail" hidden></aside>
+    </div>
   </section>
 
   <script src="app.js"></script>
+  <script src="characters2d.js"></script>
 </body>
 </html>

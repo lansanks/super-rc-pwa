@@ -70,6 +70,7 @@ let uploads = loadList(UPLOADS_KEY);
 let approvedUploads = loadList(APPROVED_KEY);
 let ideas = loadList(IDEAS_CACHE_KEY);
 let isAdmin = sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
+migrateLocalIdeas();
 
 // ---------- 导航 ----------
 enterHint.addEventListener("click", () => {
@@ -459,9 +460,24 @@ async function fetchIdeasFromGitHub() {
   );
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
-  ideas = Array.isArray(data) ? data : [];
+  // 保留本机还没同步上去的 idea，后续提交时一起合并写入 GitHub
+  ideas = mergeIdeas(Array.isArray(data) ? data : [], ideas);
   saveList(IDEAS_CACHE_KEY, ideas);
   return ideas;
+}
+
+function migrateLocalIdeas() {
+  try {
+    const old = localStorage.getItem("super-rc-ideas-v1");
+    if (!old) return;
+    const oldIdeas = JSON.parse(old);
+    localStorage.removeItem("super-rc-ideas-v1");
+    if (!Array.isArray(oldIdeas) || !oldIdeas.length) return;
+    ideas = mergeIdeas(ideas, oldIdeas);
+    saveList(IDEAS_CACHE_KEY, ideas);
+  } catch (err) {
+    console.warn("迁移旧 idea 失败:", err);
+  }
 }
 
 async function pushIdeasToGitHub(updatedIdeas, message, token) {
